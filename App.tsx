@@ -2415,15 +2415,8 @@ export default function App() {
       handleNotify('success', `Payable ${payable.payableNumber} created successfully`);
     } catch (error) {
       console.error('[App] Error creating payable:', error);
-      handleNotify('error', 'Failed to create payable. Falling back to memory storage.');
-      // Fallback to memory storage if Supabase fails
-      const fullPayable = {
-        ...payable,
-        orgId: currentOrgId,
-        createdBy: currentUser?.id || 'system'
-      } as Payable;
-      setPayables(prev => [...prev, fullPayable]);
-      AuditService.create(currentOrgId, currentUser?.id || 'system', currentUser?.name || 'System', 'PAYABLE', fullPayable.id, payable.payableNumber);
+      handleNotify('error', 'Failed to create payable in Supabase.');
+      throw error;
     }
   };
 
@@ -2440,9 +2433,8 @@ export default function App() {
       handleNotify('success', 'Payable updated successfully');
     } catch (error) {
       console.error('[App] Error updating payable:', error);
-      handleNotify('error', 'Failed to update payable. Falling back to memory storage.');
-      // Fallback to memory storage
-      setPayables(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+      handleNotify('error', 'Failed to update payable in Supabase.');
+      throw error;
     }
   };
 
@@ -2459,9 +2451,8 @@ export default function App() {
       handleNotify('success', 'Payable deleted successfully');
     } catch (error) {
       console.error('[App] Error deleting payable:', error);
-      handleNotify('error', 'Failed to delete payable. Falling back to memory storage.');
-      // Fallback to memory storage (soft delete)
-      setPayables(prev => prev.map(p => p.id === id ? { ...p, isDeleted: true, deletedAt: new Date().toISOString(), deletedBy: currentUser?.id } : p));
+      handleNotify('error', 'Failed to delete payable in Supabase.');
+      throw error;
     }
   };
 

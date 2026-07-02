@@ -29,10 +29,10 @@ interface PayablesViewProps {
   atcItems?: any[];
   atcRates?: any[];
   currentUserId?: string;
-  onCreatePayable: (payable: Payable) => void;
-  onUpdatePayable: (id: string, updates: Partial<Payable>) => void;
-  onDeletePayable: (id: string) => void;
-  onPostJournal?: (entry: Partial<JournalEntry>, lines: JournalLine[]) => void;
+  onCreatePayable: (payable: Payable) => Promise<void> | void;
+  onUpdatePayable: (id: string, updates: Partial<Payable>) => Promise<void> | void;
+  onDeletePayable: (id: string) => Promise<void> | void;
+  onPostJournal?: (entry: Partial<JournalEntry>, lines: JournalLine[]) => Promise<void> | void;
   onNotify: (type: 'success' | 'error' | 'info', message: string) => void;
 }
 
@@ -51,6 +51,11 @@ const PAYABLE_CATEGORIES: { value: PayableCategory; label: string }[] = [
   { value: 'general', label: 'General' },
   { value: 'other', label: 'Other' },
 ];
+
+const normalizePayableCategory = (category?: PayableCategory): PayableCategory => {
+  if (!category || category === 'general') return 'other';
+  return category;
+};
 
 const INVOICE_TYPES: { value: InvoiceType; label: string; color: string }[] = [
   { value: 'standard', label: 'Standard Invoice', color: 'text-gray-600' },
@@ -132,12 +137,13 @@ const PayablesView: React.FC<PayablesViewProps> = ({
   const [serverTotalPages, setServerTotalPages] = useState(1);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [pageLoadError, setPageLoadError] = useState('');
+  const [isPersisting, setIsPersisting] = useState(false);
 
   // Form state for Create/Edit
   const [formData, setFormData] = useState<Partial<Payable>>({
     vendorId: '',
     payableNumber: '',
-    category: 'general',
+    category: 'other',
     description: '',
     amount: 0,
     billDate: new Date().toISOString().slice(0, 10),
@@ -547,7 +553,7 @@ const PayablesView: React.FC<PayablesViewProps> = ({
     setFormData({
       vendorId: '',
       payableNumber: '',
-      category: 'general',
+      category: 'other',
       description: '',
       amount: 0,
       billDate: new Date().toISOString().slice(0, 10),
@@ -630,8 +636,10 @@ const PayablesView: React.FC<PayablesViewProps> = ({
     setShowPostGLModal(true);
   };
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isPersisting) return;
 
     if (!formData.vendorId) {
       onNotify('error', 'Please select a vendor.');
@@ -659,7 +667,7 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       orgId,
       vendorId: formData.vendorId!,
       payableNumber: formData.payableNumber || AccountingService.getNextReference(orgEntries, 'BILL'),
-      category: formData.category as PayableCategory || 'general',
+      category: normalizePayableCategory(formData.category as PayableCategory | undefined),
       description: formData.description || `Payable from ${selectedVendor.name}`,
       amount: formData.amount!,
       billDate: formData.billDate!,
@@ -685,16 +693,22 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       isDeleted: false,
     };
 
-    onCreatePayable(newPayable);
-    setRefreshKey(key => key + 1);
-    onNotify('success', `${INVOICE_TYPES.find(t => t.value === formData.invoiceType)?.label || 'Payable'} ${newPayable.payableNumber} created successfully.`);
-    setShowCreateModal(false);
-    resetForm();
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onCreatePayable(newPayable));
+      setRefreshKey(key => key + 1);
+      onNotify('success', `${INVOICE_TYPES.find(t => t.value === formData.invoiceType)?.label || 'Payable'} ${newPayable.payableNumber} created successfully.`);
+      setShowCreateModal(false);
+      resetForm();
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
-  const handleUpdate = (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isPersisting) return;
     if (!selectedPayable) return;
 
     if (!formData.vendorId) {
@@ -729,15 +743,22 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
 
-    onUpdatePayable(selectedPayable.id, updates);
-    setRefreshKey(key => key + 1);
-    onNotify('success', `Payable ${formData.payableNumber} updated successfully.`);
-    setShowEditModal(false);
-    setSelectedPayable(null);
-    resetForm();
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onUpdatePayable(selectedPayable.id, updates));
+      setRefreshKey(key => key + 1);
+      onNotify('success', `Payable ${formData.payableNumber} updated successfully.`);
+      setShowEditModal(false);
+      setSelectedPayable(null);
+      resetForm();
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (isPersisting) return;
+
     const payable = [...serverPayables, ...orgPayables].find(p => p.id === id);
     if (payable?.status === 'paid') {
       onNotify('error', 'Cannot delete a paid payable.');
@@ -748,13 +769,20 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       return;
     }
 
-    onDeletePayable(id);
-    setRefreshKey(key => key + 1);
-    onNotify('success', 'Payable deleted successfully.');
-    setConfirmDelete(null);
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onDeletePayable(id));
+      setRefreshKey(key => key + 1);
+      onNotify('success', 'Payable deleted successfully.');
+      setConfirmDelete(null);
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
-  const handleStatusChange = (id: string, newStatus: PayableStatus) => {
+  const handleStatusChange = async (id: string, newStatus: PayableStatus) => {
+    if (isPersisting) return;
+
     const payable = [...serverPayables, ...orgPayables].find(p => p.id === id);
     if (!payable) return;
 
@@ -772,19 +800,25 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       updates.paymentDate = new Date().toISOString().slice(0, 10);
     }
 
-    onUpdatePayable(id, updates);
-    setRefreshKey(key => key + 1);
-    onNotify('success', `Payable status updated to ${STATUS_CONFIG[newStatus].label}.`);
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onUpdatePayable(id, updates));
+      setRefreshKey(key => key + 1);
+      onNotify('success', `Payable status updated to ${STATUS_CONFIG[newStatus].label}.`);
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
   // ============================================================================
   // POST TO GL HANDLER
   // ============================================================================
-  const handlePostToGL = () => {
+  const handlePostToGL = async () => {
     if (!selectedPayable || !onPostJournal) {
       onNotify('error', 'Cannot post to GL.');
       return;
     }
+    if (isPersisting) return;
 
     const vendor = orgVendors.find(v => v.id === selectedPayable.vendorId);
     const expenseAccount = orgAccounts.find(a => a.id === selectedPayable.expenseAccountId);
@@ -901,30 +935,36 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       status: 'POSTED',
     };
 
-    onPostJournal(journalEntry, lines);
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onPostJournal(journalEntry, lines));
 
-    // Update payable with journal entry reference
-    onUpdatePayable(selectedPayable.id, {
-      journalEntryId: 'POSTED',
-      status: 'approved',
-      approvedBy: currentUserId,
-      approvedAt: new Date().toISOString(),
-    });
-    setRefreshKey(key => key + 1);
+      // Update payable with journal entry reference
+      await Promise.resolve(onUpdatePayable(selectedPayable.id, {
+        journalEntryId: 'POSTED',
+        status: 'approved',
+        approvedBy: currentUserId,
+        approvedAt: new Date().toISOString(),
+      }));
+      setRefreshKey(key => key + 1);
 
-    onNotify('success', `Journal entry posted for ${selectedPayable.payableNumber}`);
-    setShowPostGLModal(false);
-    setSelectedPayable(null);
+      onNotify('success', `Journal entry posted for ${selectedPayable.payableNumber}`);
+      setShowPostGLModal(false);
+      setSelectedPayable(null);
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
   // ============================================================================
   // PAYMENT HANDLER
   // ============================================================================
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
     if (!selectedPayable || !onPostJournal) {
       onNotify('error', 'Cannot process payment.');
       return;
     }
+    if (isPersisting) return;
 
     if (!paymentData.amountPaid || paymentData.amountPaid <= 0) {
       onNotify('error', 'Please enter a valid payment amount.');
@@ -981,28 +1021,30 @@ const PayablesView: React.FC<PayablesViewProps> = ({
       status: 'POSTED',
     };
 
-    onPostJournal(journalEntry, lines);
+    try {
+      setIsPersisting(true);
+      await Promise.resolve(onPostJournal(journalEntry, lines));
 
-    // Update payable status
-    const totalDue = selectedPayable.netPayable || selectedPayable.amount;
-    const newStatus: PayableStatus = 'paid';
+      const newStatus: PayableStatus = 'paid';
+      await Promise.resolve(onUpdatePayable(selectedPayable.id, {
+        status: newStatus,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentBankAccountId: paymentData.bankAccountId,
+        checkNumber: paymentData.checkNumber,
+        checkDate: paymentData.checkDate,
+        paidBy: currentUserId,
+        paidAt: new Date().toISOString(),
+      }));
+      setRefreshKey(key => key + 1);
 
-    onUpdatePayable(selectedPayable.id, {
-      status: newStatus,
-      paymentDate: paymentData.paymentDate,
-      paymentMethod: paymentData.paymentMethod,
-      paymentBankAccountId: paymentData.bankAccountId,
-      checkNumber: paymentData.checkNumber,
-      checkDate: paymentData.checkDate,
-      paidBy: currentUserId,
-      paidAt: new Date().toISOString(),
-    });
-    setRefreshKey(key => key + 1);
-
-    onNotify('success', `Payment of \u20B1${formatCurrency(paymentData.amountPaid)} processed for ${selectedPayable.payableNumber}`);
-    setShowPaymentModal(false);
-    setSelectedPayable(null);
-    resetPaymentForm();
+      onNotify('success', `Payment of \u20B1${formatCurrency(paymentData.amountPaid)} processed for ${selectedPayable.payableNumber}`);
+      setShowPaymentModal(false);
+      setSelectedPayable(null);
+      resetPaymentForm();
+    } finally {
+      setIsPersisting(false);
+    }
   };
 
   // ============================================================================
@@ -1932,7 +1974,7 @@ const PayableFormModal: React.FC<PayableFormModalProps> = ({
               <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</label>
               <select
                 className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded outline-none focus:border-brand text-sm font-medium appearance-none"
-                value={formData.category || 'general'}
+                value={formData.category || 'other'}
                 onChange={e => setFormData(prev => ({ ...prev, category: e.target.value as PayableCategory }))}
               >
                 {PAYABLE_CATEGORIES.map(cat => (
