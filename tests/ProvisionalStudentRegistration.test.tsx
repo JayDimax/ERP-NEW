@@ -129,7 +129,7 @@ describe('Provisional Student AR Billing and Registrar Completion Workflow', () 
 
     render(
       <StudentsView
-        orgId={mockOrgId}
+        orgId=""
         brandColor="#f97316"
         students={[registeredStudent, provisionalStudent]}
         batches={[]}
@@ -156,7 +156,7 @@ describe('Provisional Student AR Billing and Registrar Completion Workflow', () 
     expect(screen.queryByText(/CLARA, Maria/i)).toBeNull();
 
     // Click Complete Registration
-    const completeBtn = screen.getByRole('button', { name: /Complete Registration/i });
+    const completeBtn = screen.getByRole('button', { name: 'Complete Registration' });
     fireEvent.click(completeBtn);
 
     // Edit modal opens with provisional warning and finalized title
@@ -164,12 +164,12 @@ describe('Provisional Student AR Billing and Registrar Completion Workflow', () 
     expect(screen.getByText(/Provisional Learner \(Billed by AR\)/i)).toBeInTheDocument();
 
     // Fill in ULI to complete registration
-    const uliInput = screen.getByPlaceholderText(/Enter official ULI/i);
+    const uliInput = screen.getByPlaceholderText(/Enter ULI/i);
     fireEvent.change(uliInput, { target: { value: 'ULI-2026-COMPLETE' } });
 
     // Save registration
     const saveBtn = screen.getByRole('button', { name: /Complete & Finalize Registration/i });
-    fireEvent.click(saveBtn);
+    fireEvent.submit(saveBtn.closest('form')!);
 
     expect(onUpdateStudent).toHaveBeenCalledTimes(1);
     const updatedStudent = onUpdateStudent.mock.calls[0][0] as Student;

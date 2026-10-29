@@ -2206,7 +2206,9 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
 
                       <div className="flex justify-center gap-3 pt-3">
                         <button type="button" onClick={() => { setShowEditModal(false); setEditingStudent(null); setEditPhotoPreview(null); setShowEditCamera(false); }} className="px-8 py-3 bg-white border border-gray-200 text-gray-700 rounded text-sm font-semibold uppercase tracking-wide hover:bg-gray-50 transition-all">Cancel</button>
-                        <button type="submit" className="px-8 py-3 bg-brand text-white rounded text-sm font-semibold shadow-lg shadow-brand/20 hover:bg-brand-hover active:scale-95 transition-all">Save Changes</button>
+                        <button type="submit" className={`px-8 py-3 text-white rounded text-sm font-semibold shadow-lg active:scale-95 transition-all ${isProvisionalStudent(editingStudent) ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20' : 'bg-brand shadow-brand/20 hover:bg-brand-hover'}`}>
+                          {isProvisionalStudent(editingStudent) ? 'Complete & Finalize Registration' : 'Save Changes'}
+                        </button>
                       </div>
                     </form>
                   </div>
