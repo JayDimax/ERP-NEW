@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Invoice, InvoiceLine, InvoiceStatus, Sponsor, Student, Enrollment, AssessmentRegistration, Batch, Qualification, CourseFee, ChartOfAccount, AccountClass, StudentLedger, JournalEntry, TaxCategoryEntry, Organization, User as AppUser, Payment } from '../types';
+import { Invoice, InvoiceLine, InvoiceStatus, Sponsor, Student, Enrollment, AssessmentRegistration, Batch, Qualification, CourseFee, ChartOfAccount, AccountClass, StudentLedger, JournalEntry, TaxCategoryEntry, Organization, User as AppUser, Payment, isProvisionalStudent } from '../types';
 import { format } from 'date-fns';
 import { generateUUID } from '../utils/uuid';
 import { calculateInvoiceDueDate, todayISO } from '../utils/invoiceTerms';
@@ -11,7 +11,7 @@ import PaginationControls, { usePaginatedRows } from '../components/PaginationCo
 import {
   FileText, Plus, Search, Filter, X, Save, Trash2, Edit3, Eye,
   Building2, User, Calendar, DollarSign, Percent, CheckCircle,
-  XCircle, AlertTriangle, Receipt, Download, Printer,
+  XCircle, AlertTriangle, AlertCircle, Receipt, Download, Printer,
   RotateCcw, MoreHorizontal, Scissors, CornerUpLeft,
   ChevronDown, ChevronUp, MoreVertical, Ban, Wand2, Users,
   GraduationCap, CheckSquare, Square, Calculator, FileSpreadsheet, ArrowUpDown,
@@ -49,10 +49,11 @@ interface InvoicesViewProps {
   orgId: string;
   taxCategories: TaxCategoryEntry[];
   onNavigate?: (tab: string, context?: any) => void;
+  onAddStudent?: (student: Student) => Promise<Student> | void;
 }
 
 const getStudentOptionLabel = (student: Student) =>
-  `${student.lastName}, ${student.firstName}`;
+  `${student.lastName}, ${student.firstName}${isProvisionalStudent(student) ? ' (Provisional)' : ''}`;
 
 const compareStudentsByName = (left: Student, right: Student) => {
   const lastNameComparison = String(left.lastName || '').localeCompare(String(right.lastName || ''), undefined, { sensitivity: 'base' });
@@ -65,8 +66,9 @@ const SearchableStudentSelect: React.FC<{
   students: Student[];
   value: string;
   onChange: (studentId: string) => void;
+  onQuickAdd?: (initialQuery: string) => void;
   disabled?: boolean;
-}> = ({ students, value, onChange, disabled = false }) => {
+}> = ({ students, value, onChange, disabled = false, onQuickAdd }) => {
   const selectedStudent = students.find(student => student.id === value);
   const [query, setQuery] = useState(selectedStudent ? getStudentOptionLabel(selectedStudent) : '');
   const [isOpen, setIsOpen] = useState(false);
@@ -181,61 +183,141 @@ const SearchableStudentSelect: React.FC<{
               className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm ${index === activeIndex ? 'bg-orange-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}
             >
               <span className="truncate font-medium">{getStudentOptionLabel(student)}</span>
+              {isProvisionalStudent(student) && (
+                <span className="ml-2 shrink-0 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                  Provisional
+                </span>
+              )}
             </button>
           )) : (
-            <p className="px-3 py-4 text-center text-sm text-gray-500">No learners match "{query}".</p>
+            <div className="p-3 text-center">
+              <p className="text-sm text-gray-500 mb-2">No learners match "{query}".</p>
+              {onQuickAdd && (
+                <button
+                  type="button"
+                  onMouseDown={event => event.preventDefault()}
+                  onClick={() => {
+                    setIsOpen(false);
+                    onQuickAdd(query);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand hover:bg-brand-hover rounded shadow-xs transition-colors"
+                >
+                  <Plus size={13} />
+                  <span>Bill as unregistered learner</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
+
     </div>
   );
 };
 
 const getCourseFeeOptionLabel = (fee: CourseFee) =>
-  `${fee.feeCode ? `${fee.feeCode} - ` : ''}${fee.feeName}`;
+  `${fee.feeName}${fee.feeCode ? ` - ${fee.feeCode}` : ''}`;
 
 const SearchableCourseFeeSelect: React.FC<{
   fees: CourseFee[];
   value: string;
   onChange: (courseFeeId: string) => void;
   disabled?: boolean;
-  listId: string;
-}> = ({ fees, value, onChange, disabled = false, listId }) => {
+  listId?: string;
+}> = ({ fees, value, onChange, disabled = false }) => {
   const selectedFee = fees.find(fee => fee.id === value);
   const [query, setQuery] = useState(selectedFee ? getCourseFeeOptionLabel(selectedFee) : '');
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setQuery(selectedFee ? getCourseFeeOptionLabel(selectedFee) : '');
   }, [selectedFee?.id, selectedFee?.feeCode, selectedFee?.feeName]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredFees = useMemo(() => {
+    if (!query.trim() || (selectedFee && query === getCourseFeeOptionLabel(selectedFee))) {
+      return fees;
+    }
+    const q = query.toLowerCase();
+    return fees.filter(f =>
+      (f.feeName || '').toLowerCase().includes(q) ||
+      (f.feeCode || '').toLowerCase().includes(q)
+    );
+  }, [fees, query, selectedFee]);
+
   return (
-    <>
-      <input
-        type="search"
-        list={listId}
-        value={query}
-        disabled={disabled}
-        placeholder="Search code or fee..."
-        aria-label="Search course fee by code or name"
-        onChange={event => {
-          const nextQuery = event.target.value;
-          setQuery(nextQuery);
-          const normalizedQuery = nextQuery.trim().toLowerCase();
-          const match = fees.find(fee => getCourseFeeOptionLabel(fee).toLowerCase() === normalizedQuery);
-          if (match) onChange(match.id);
-          else if (!nextQuery) onChange('');
-        }}
-        onBlur={() => {
-          const exactMatch = fees.find(fee => getCourseFeeOptionLabel(fee).toLowerCase() === query.trim().toLowerCase());
-          if (exactMatch) onChange(exactMatch.id);
-          else setQuery(selectedFee ? getCourseFeeOptionLabel(selectedFee) : '');
-        }}
-        className="w-full rounded px-3 py-1 text-[13px] font-normal text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
-      />
-      <datalist id={listId}>
-        {fees.map(fee => <option key={fee.id} value={getCourseFeeOptionLabel(fee)} />)}
-      </datalist>
-    </>
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <input
+          type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          aria-label="Search course fee by name or code"
+          placeholder="Search code or fee..."
+          value={query}
+          disabled={disabled}
+          onFocus={() => setIsOpen(true)}
+          onChange={e => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+            if (!e.target.value) onChange('');
+          }}
+          className="w-full rounded px-2.5 py-1 pr-7 text-[13px] font-normal text-gray-700 border border-gray-200 focus:outline-none focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        {selectedFee && !disabled && (
+          <button
+            type="button"
+            aria-label="Clear selected course fee"
+            onClick={() => {
+              onChange('');
+              setQuery('');
+              setIsOpen(false);
+            }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      {isOpen && !disabled && (
+        <div
+          role="listbox"
+          className="absolute z-50 mt-1 max-h-48 w-full min-w-[240px] overflow-auto rounded-md border border-gray-200 bg-white shadow-lg py-1 text-xs"
+        >
+          {filteredFees.map(fee => (
+            <button
+              key={fee.id}
+              type="button"
+              role="option"
+              aria-selected={fee.id === value}
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => {
+                onChange(fee.id);
+                setQuery(getCourseFeeOptionLabel(fee));
+                setIsOpen(false);
+              }}
+              className="flex w-full items-center px-3 py-1.5 text-left text-gray-700 hover:bg-orange-50 hover:text-orange-900"
+            >
+              {getCourseFeeOptionLabel(fee)}
+            </button>
+          ))}
+          {filteredFees.length === 0 && (
+            <div className="px-3 py-2 text-gray-400 text-center">No fees found</div>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -299,14 +381,15 @@ const CurrencyLineInput: React.FC<{
 
 const InvoicesView: React.FC<InvoicesViewProps> = ({
   documentMode = 'INVOICE',
-  invoices, payments = [], sponsors = [], students = [], users = [], enrollments = [], assessmentRegistrations = [], batches = [], qualifications = [], courseFees = [], accounts = [], currency = 'PHP', isVatRegistered,
+  invoices, payments = [], sponsors = [], students = [], users = [], currentUser = null, enrollments = [], assessmentRegistrations = [], batches = [], qualifications = [], courseFees = [], accounts = [], currency = 'PHP', isVatRegistered,
   onAddInvoice, onUpdateInvoice, onDeleteInvoice, onPostInvoice, onVoidInvoice, onUpdateEnrollment, onUpdateAssessmentRegistration, onAddStudentLedgerEntry,
   onViewJournal,
   journalEntries = [],
   organization,
   orgId,
   taxCategories,
-  onNavigate
+  onNavigate,
+  onAddStudent
 }) => {
   const isNonInvoicePayment = documentMode === 'NON_INVOICE_PAYMENT';
   const documentLabel = isNonInvoicePayment ? 'Non-Invoice Payment' : 'Invoice';
@@ -374,6 +457,87 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [pageLoadError, setPageLoadError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [creatorNameMap, setCreatorNameMap] = useState<Record<string, string>>({});
+
+  // Quick Unregistered Student Billing State
+  const [showQuickStudentModal, setShowQuickStudentModal] = useState(false);
+  const [quickStudentFirstName, setQuickStudentFirstName] = useState('');
+  const [quickStudentLastName, setQuickStudentLastName] = useState('');
+  const [quickStudentMiddleName, setQuickStudentMiddleName] = useState('');
+  const [quickStudentContact, setQuickStudentContact] = useState('');
+  const [quickStudentEmail, setQuickStudentEmail] = useState('');
+  const [quickStudentError, setQuickStudentError] = useState<string | null>(null);
+  const [isSavingQuickStudent, setIsSavingQuickStudent] = useState(false);
+
+  const handleOpenQuickStudent = (initialQuery = '') => {
+    setQuickStudentError(null);
+    const trimmed = initialQuery.trim();
+    if (trimmed.includes(',')) {
+      const [last, first] = trimmed.split(',').map(s => s.trim());
+      setQuickStudentLastName(last || '');
+      setQuickStudentFirstName(first || '');
+    } else if (trimmed.includes(' ')) {
+      const parts = trimmed.split(/\s+/);
+      setQuickStudentFirstName(parts[0] || '');
+      setQuickStudentLastName(parts.slice(1).join(' ') || '');
+    } else {
+      setQuickStudentFirstName(trimmed);
+      setQuickStudentLastName('');
+    }
+    setQuickStudentMiddleName('');
+    setQuickStudentContact('');
+    setQuickStudentEmail('');
+    setShowQuickStudentModal(true);
+  };
+
+  const handleCreateQuickStudent = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!quickStudentFirstName.trim() || !quickStudentLastName.trim()) {
+      setQuickStudentError('First name and last name are required.');
+      return;
+    }
+    setQuickStudentError(null);
+    setIsSavingQuickStudent(true);
+    try {
+      const newStudent: Student = {
+        id: `stud-${Date.now()}`,
+        orgId: orgId || organization?.id || '',
+        firstName: quickStudentFirstName.trim(),
+        lastName: quickStudentLastName.trim(),
+        middleName: quickStudentMiddleName.trim() || undefined,
+        contactNumber: quickStudentContact.trim() || undefined,
+        email: quickStudentEmail.trim() || undefined,
+        registrationStatus: 'PROVISIONAL',
+        documents: [{
+          id: `doc-provisional-${Date.now()}`,
+          name: 'Provisional AR Registration',
+          status: 'PENDING'
+        }],
+        createdAt: new Date().toISOString()
+      };
+      let createdStudent = newStudent;
+      if (onAddStudent) {
+        const res = await onAddStudent(newStudent);
+        if (res && res.id) createdStudent = res;
+      }
+      setFormData(prev => ({
+        ...prev,
+        studentId: createdStudent.id,
+        sponsorId: '',
+        assessmentRegistrationId: prev.assessmentRegistrationId && createdStudent.id ? prev.assessmentRegistrationId : ''
+      }));
+      setShowQuickStudentModal(false);
+      setQuickStudentFirstName('');
+      setQuickStudentLastName('');
+      setQuickStudentMiddleName('');
+      setQuickStudentContact('');
+      setQuickStudentEmail('');
+    } catch (err) {
+      setQuickStudentError(err instanceof Error ? err.message : 'Failed to create provisional student.');
+    } finally {
+      setIsSavingQuickStudent(false);
+    }
+  };
 
 
   // Derived: Students in the batch for annex (scoped strictly to invoice sponsor/student recipient)
@@ -766,15 +930,14 @@ const brandColor = organization?.primaryColor || '#059669';
   };
 
   const getSelectableCourseFeesForLine = (line: InvoiceLine) => {
-    if (isNonInvoicePayment) {
-      return [...courseFees].sort((left, right) => {
-        const codeComparison = String(left.feeCode || '').localeCompare(String(right.feeCode || ''), undefined, {
-          numeric: true,
-          sensitivity: 'base'
+    if (isNonInvoicePayment || !formData.batchId) {
+      return courseFees
+        .filter(fee => fee.isActive !== false && !fee.isDeleted)
+        .sort((left, right) => {
+          const nameComparison = String(left.feeName || '').localeCompare(String(right.feeName || ''), undefined, { sensitivity: 'base' });
+          if (nameComparison !== 0) return nameComparison;
+          return String(left.feeCode || '').localeCompare(String(right.feeCode || ''), undefined, { numeric: true, sensitivity: 'base' });
         });
-        if (codeComparison !== 0) return codeComparison;
-        return String(left.feeName || '').localeCompare(String(right.feeName || ''), undefined, { sensitivity: 'base' });
-      });
     }
 
     const qualificationId = getInvoiceQualificationId();
@@ -1102,7 +1265,11 @@ const brandColor = organization?.primaryColor || '#059669';
   const handleBatchChange = async (batchId: string, targetSponsorId?: string, targetStudentId?: string) => {
     const batch = batches.find(b => b.id === batchId);
     if (!batch) {
-      setFormData(prev => ({ ...prev, batchId: '', assessmentRegistrationId: '', sponsorId: '', studentId: '', lines: [] }));
+      setFormData(prev => ({
+        ...prev,
+        batchId: '',
+        lines: prev.lines.filter(l => l.lineType !== 'COURSE_FEE' || !l.courseFeeId)
+      }));
       return;
     }
 
@@ -1496,7 +1663,20 @@ const brandColor = organization?.primaryColor || '#059669';
   // Apply course fee to line
   const handleApplyCourseFee = (index: number, courseFeeId: string) => {
     const fee = courseFees.find(f => f.id === courseFeeId);
+    if (!fee) {
+      const updatedLines = [...formData.lines];
+      updatedLines[index] = {
+        ...updatedLines[index],
+        courseFeeId: '',
+        lineType: 'MANUAL',
+        classificationCode: ''
+      };
+      setFormData(prev => ({ ...prev, lines: updatedLines }));
+      return;
+    }
     if (fee) {
+      const qual = qualifications.find(q => q.id === fee.qualificationId);
+      const qualCode = qual?.code || '';
       const currentLineType = getLineType(formData.lines[index]);
       const nextLineType = currentLineType === 'DISCOUNT' || currentLineType === 'ADJUSTMENT'
         ? currentLineType
@@ -1528,7 +1708,7 @@ const brandColor = organization?.primaryColor || '#059669';
         amount,
         glAccountId: fee.glAccountId || updatedLines[index].glAccountId,
         taxCategoryId: fee.taxCategoryId || updatedLines[index].taxCategoryId,
-        classificationCode: getClassificationCode(fee.glAccountId || updatedLines[index].glAccountId)
+        classificationCode: qualCode || getClassificationCode(fee.glAccountId || updatedLines[index].glAccountId)
       };
 
       setFormData(prev => ({ ...prev, lines: updatedLines }));
@@ -1857,6 +2037,14 @@ const brandColor = organization?.primaryColor || '#059669';
         setServerInvoices(Array.isArray(result?.rows) ? result.rows : []);
         setServerTotal(result.total);
         setServerTotalPages(result.totalPages);
+        const rows = Array.isArray(result?.rows) ? result.rows : [];
+        const creatorIds = rows.map((r: any) => r.createdBy).filter(Boolean);
+        const dataService = DataServiceFactory.getService();
+        if (typeof (dataService as any).getInvoiceCreatorNames === 'function' && orgId) {
+          (dataService as any).getInvoiceCreatorNames(orgId).then((map: any) => {
+            if (map && isActive) setCreatorNameMap(prev => ({ ...prev, ...map }));
+          }).catch(() => {});
+        }
       })
       .catch(error => {
         if (!isActive) return;
@@ -2150,11 +2338,23 @@ const brandColor = organization?.primaryColor || '#059669';
     return format(parsed, 'MM-dd-yyyy');
   };
 
-  const getCreatedByName = (createdBy?: string) => {
+  function getCreatedByName(createdBy?: string) {
     if (!createdBy) return '-';
     if (createdBy === 'system') return 'System';
     const user = users.find(u => u.id === createdBy);
-    return user?.name || user?.email || createdBy;
+    if (creatorNameMap[createdBy]) return creatorNameMap[createdBy];
+    if (currentUser && (currentUser.id === createdBy || (currentUser as any).authUid === createdBy)) {
+      const parts = [currentUser.name, currentUser.lastName].filter(Boolean);
+      return parts.length > 0 ? parts.join(' ') : currentUser.email || createdBy;
+    }
+    const matchedUser = users.find(u => u.id === createdBy || (u as any).authUid === createdBy) || user;
+    if (matchedUser) {
+      if (matchedUser.lastName && matchedUser.name && !matchedUser.name.includes(matchedUser.lastName)) {
+        return `${matchedUser.name} ${matchedUser.lastName}`;
+      }
+      return matchedUser.name || matchedUser.email || createdBy;
+    }
+    return createdBy;
   };
 
   const parseInputCurrency = (value: string) => {
@@ -3932,8 +4132,9 @@ const brandColor = organization?.primaryColor || '#059669';
                   {/* sponsor and student side by side */}
                   <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isNonInvoicePayment ? 'lg:col-span-8' : 'lg:col-span-4'}`}>
                     <div className="min-w-0">
-                      <label className="text-xs font-medium text-gray-500">{isNonInvoicePayment ? 'Customer / Sponsor' : 'Sponsor'}</label>
+                      <label className="text-xs font-medium text-gray-500">{isNonInvoicePayment || !formData.batchId ? 'Customer / Sponsor' : 'Sponsor'}</label>
                       <select
+                        aria-label="Customer / Sponsor"
                         value={formData.sponsorId}
                         onChange={e => {
                           const newSponsorId = e.target.value;
@@ -3948,16 +4149,29 @@ const brandColor = organization?.primaryColor || '#059669';
                         className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-200 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="">Select Sponsor</option>
-                        {sponsors.filter(s => isNonInvoicePayment || (s.customerType || 'SPONSOR') === 'SPONSOR').map(s => (
+                        {sponsors.filter(s => isNonInvoicePayment || !formData.batchId || (s.customerType || 'SPONSOR') === 'SPONSOR').map(s => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
                       </select>
                     </div>
                     <div className="min-w-0">
-                      <label className="text-xs font-medium text-gray-500">Student</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-medium text-gray-500">Student</label>
+                        {!isReadOnly && !formData.sponsorId && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuickStudent()}
+                            className="text-[11px] font-semibold text-brand hover:underline flex items-center gap-0.5"
+                            title="Bill an unregistered walk-in student by entering their name"
+                          >
+                            <Plus size={11} /> Bill Unregistered
+                          </button>
+                        )}
+                      </div>
                       <SearchableStudentSelect
                         students={formData.batchId ? batchStudentsForBilling : students.filter(student => !student.isDeleted)}
                         value={formData.studentId}
+                        onQuickAdd={!isReadOnly && !formData.sponsorId ? handleOpenQuickStudent : undefined}
                         onChange={studentId => {
                           if (formData.batchId) {
                             handleBatchChange(formData.batchId, '', studentId);
@@ -3966,6 +4180,14 @@ const brandColor = organization?.primaryColor || '#059669';
                           }
                         }}
                         disabled={(!!formData.sponsorId && !formData.assessmentRegistrationId) || isReadOnly}
+                      />
+                      {formData.studentId && isProvisionalStudent(students.find(s => s.id === formData.studentId)) && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                          <AlertCircle size={12} className="shrink-0 text-amber-600" />
+                          <span>Provisional learner (billed before registrar registration)</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'none' }}
                       />
                     </div>
                   </div>
@@ -4380,7 +4602,7 @@ const brandColor = organization?.primaryColor || '#059669';
                                   }
                                   case 'courseFeeId':
                                     return <td key={colKey} className="px-3 py-2" style={lineColWidths[colKey] ? { width: lineColWidths[colKey], minWidth: lineColWidths[colKey] } : undefined}>
-                                      {isNonInvoicePayment ? (
+                                      {(isNonInvoicePayment || !formData.batchId) ? (
                                         <SearchableCourseFeeSelect
                                           fees={getSelectableCourseFeesForLine(line)}
                                           value={line.courseFeeId || ''}
@@ -4406,7 +4628,7 @@ const brandColor = organization?.primaryColor || '#059669';
                                     const linkedCourseFee = line.courseFeeId
                                       ? courseFees.find(fee => fee.id === line.courseFeeId)
                                       : undefined;
-                                    const isCourseFeeDescription = getLineType(line) === 'COURSE_FEE' && !!linkedCourseFee;
+                                    const isCourseFeeDescription = getLineType(line) === 'COURSE_FEE' && !!linkedCourseFee && !!formData.batchId;
                                     return <td key={colKey} className="px-3 py-2" style={lineColWidths[colKey] ? { width: lineColWidths[colKey], minWidth: lineColWidths[colKey] } : undefined}>
                                       <input
                                         type="text"
@@ -5112,6 +5334,133 @@ const brandColor = organization?.primaryColor || '#059669';
             </div>
           </ModalPortal>
         )}
+      {showQuickStudentModal && (
+        <ModalPortal>
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              <div className="p-4 border-b flex items-center justify-between bg-brand/5 border-brand/20">
+                <div className="flex items-center gap-2">
+                  <User size={18} className="text-brand" />
+                  <h3 className="text-sm font-bold text-gray-800">Bill Unregistered Learner</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowQuickStudentModal(false);
+                    setQuickStudentError(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateQuickStudent} className="p-5 space-y-4">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800 leading-relaxed">
+                  Enter the learner's basic info to bill them immediately. A provisional record is created so you can issue the invoice now, and the Registrar can complete full registration and TESDA compliance documents later.
+                </div>
+
+                {quickStudentError && (
+                  <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                    <AlertTriangle size={14} className="shrink-0" />
+                    <span>{quickStudentError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      placeholder="e.g. Maria"
+                      value={quickStudentFirstName}
+                      onChange={e => setQuickStudentFirstName(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Santos"
+                      value={quickStudentLastName}
+                      onChange={e => setQuickStudentLastName(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 block mb-1">
+                    Middle Name <span className="text-gray-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Reyes"
+                    value={quickStudentMiddleName}
+                    onChange={e => setQuickStudentMiddleName(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">
+                      Contact Number <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="09171234567"
+                      value={quickStudentContact}
+                      onChange={e => setQuickStudentContact(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">
+                      Email Address <span className="text-gray-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="maria@example.com"
+                      value={quickStudentEmail}
+                      onChange={e => setQuickStudentEmail(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-brand/30 focus:border-brand"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickStudentModal(false);
+                      setQuickStudentError(null);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingQuickStudent}
+                    className="px-4 py-2 bg-brand text-white rounded-lg text-xs font-semibold hover:bg-brand-hover shadow-xs disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                  >
+                    {isSavingQuickStudent ? 'Saving...' : 'Create & Select for Invoice'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
     </div>
   );
 };

@@ -322,7 +322,15 @@ export class SupabaseDataService implements IDataService {
           console.warn(`[Supabase] Failed to load ${table} through Edge Function, falling back to REST:`, error);
           return this.fetchFromSupabase(table);
         })
-        : () => this.fetchFromSupabase(table));
+        : table === 'course_fees'
+          ? () => this.fetchAllPagesWithSoftDeleteFallback<any>(
+              `${this.baseUrl}/course_fees?is_deleted=eq.false&order=created_at.desc`,
+              'course_fees'
+            ).catch(error => {
+              console.warn('[Supabase] Failed paginated course_fees load, falling back to REST:', error);
+              return this.fetchFromSupabase('course_fees');
+            })
+          : () => this.fetchFromSupabase(table));
 
       const results = await this.fetchInBatches(fetchers, 8);
 
@@ -516,9 +524,7 @@ export class SupabaseDataService implements IDataService {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'apikey': this.supabaseKey,
-          'Authorization': `Bearer ${this.supabaseKey}`,
-          'Content-Type': 'application/json',
+          ...(await this.getHeaders()),
           'Prefer': 'return=representation',
         },
         body: JSON.stringify(snakeCaseData),
@@ -558,9 +564,7 @@ export class SupabaseDataService implements IDataService {
       const response = await fetch(url, {
         method: 'PATCH',
         headers: {
-          'apikey': this.supabaseKey,
-          'Authorization': `Bearer ${this.supabaseKey}`,
-          'Content-Type': 'application/json',
+          ...(await this.getHeaders()),
           'Prefer': 'return=representation',
         },
         body: JSON.stringify(snakeCaseUpdates),
@@ -1255,15 +1259,11 @@ export class SupabaseDataService implements IDataService {
     const usedIn: string[] = [];
 
     try {
+      const headers = await this.getHeaders();
       // Check if student is enrolled in any batches
       const batchResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/batch_students?student_id=eq.${studentId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const batchStudents = await batchResponse.json();
       if (Array.isArray(batchStudents) && batchStudents.length > 0) {
@@ -1273,12 +1273,7 @@ export class SupabaseDataService implements IDataService {
       // Check if student has any documents
       const docsResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/student_documents?student_id=eq.${studentId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const docs = await docsResponse.json();
       if (Array.isArray(docs) && docs.length > 0) {
@@ -1373,15 +1368,11 @@ export class SupabaseDataService implements IDataService {
     const usedIn: string[] = [];
 
     try {
+      const headers = await this.getHeaders();
       // Check if trainer is assigned to any batches
       const batchResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/batches?trainer_id=eq.${trainerId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const batches = await batchResponse.json();
       if (Array.isArray(batches) && batches.length > 0) {
@@ -1391,12 +1382,7 @@ export class SupabaseDataService implements IDataService {
       // Check if trainer has any schedules
       const scheduleResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/schedules?trainer_id=eq.${trainerId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const schedules = await scheduleResponse.json();
       if (Array.isArray(schedules) && schedules.length > 0) {
@@ -1406,12 +1392,7 @@ export class SupabaseDataService implements IDataService {
       // Check if trainer has a linked user account
       const userResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/users?trainer_id=eq.${trainerId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const users = await userResponse.json();
       if (Array.isArray(users) && users.length > 0) {
@@ -1499,15 +1480,11 @@ export class SupabaseDataService implements IDataService {
     const usedIn: string[] = [];
 
     try {
+      const headers = await this.getHeaders();
       // Check if qualification is used in any batches
       const batchResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/batches?qualification_id=eq.${qualificationId}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const batches = await batchResponse.json();
       if (Array.isArray(batches) && batches.length > 0) {
@@ -1518,12 +1495,7 @@ export class SupabaseDataService implements IDataService {
       // Note: This requires checking if qualificationId is in any trainer's qualification_ids array
       const trainerResponse = await fetch(
         `${this.supabaseUrl}/rest/v1/trainers?qualification_ids=cs.{${qualificationId}}&select=id`,
-        {
-          headers: {
-            'apikey': this.supabaseKey,
-            'Authorization': `Bearer ${this.supabaseKey}`,
-          },
-        }
+        { headers }
       );
       const trainers = await trainerResponse.json();
       if (Array.isArray(trainers) && trainers.length > 0) {
@@ -2801,12 +2773,10 @@ export class SupabaseDataService implements IDataService {
     if (snake.gl_account_id === '') snake.gl_account_id = null;
     if (snake.tax_category_id === '') snake.tax_category_id = null;
     if (snake.qualification_id === '') snake.qualification_id = null;
+    if (snake.is_subject_to_ewt === false && snake.ewt_rate === undefined) snake.ewt_rate = null;
 
     const filtered = this.filterToTableSchema('course_fees', snake);
-    // PostgREST can only verify Supabase-issued JWTs (or the configured anon
-    // key). The TokenManager token is an AT-ERP application JWT intended for
-    // our Edge Functions, so sending it here causes PGRST301.
-    return this.updateInSupabaseRaw('course_fees', id, filtered, false, true);
+    return this.updateInSupabaseRaw('course_fees', id, filtered, true, true);
   }
 
   async deleteCourseFee(id: string): Promise<void> {
@@ -2817,15 +2787,8 @@ export class SupabaseDataService implements IDataService {
   async getCourseFeesByOrg(orgId: string): Promise<any[]> {
     console.debug('[Supabase] getCourseFeesByOrg called with:', orgId);
     try {
-      const url = `${this.baseUrl}/course_fees?org_id=eq.${orgId}&order=created_at.desc`;
-      const response = await fetch(url, { headers: (await this.getHeaders()) });
-      if (!response.ok) {
-        if (response.status === 404) {
-          return [];
-        }
-        throw new Error('Failed to fetch course fees');
-      }
-      const data = await response.json();
+      const url = `${this.baseUrl}/course_fees?org_id=eq.${orgId}&is_deleted=eq.false&order=created_at.desc`;
+      const data = await this.fetchAllPagesWithSoftDeleteFallback<any>(url, 'course_fees');
       return Array.isArray(data) ? data.map(d => this.snakeToCamel(d)) : [];
     } catch (error) {
       console.error('[Supabase] Error fetching course fees:', error);
@@ -3317,6 +3280,62 @@ export class SupabaseDataService implements IDataService {
     }
   }
 
+  private sanitizeTimeExpensePayload(payload: Record<string, any>, isInsert: boolean): Record<string, any> {
+    const sanitized = { ...payload };
+    if (isInsert || !this.isUuid(sanitized.id)) {
+      delete sanitized.id;
+    }
+    const nullableUuidCols = [
+      'expense_account_id',
+      'qualification_id',
+      'tax_category_id',
+      'supplier_id',
+      'employee_id',
+      'payable_id',
+      'created_by',
+    ];
+    for (const col of nullableUuidCols) {
+      if (Object.prototype.hasOwnProperty.call(sanitized, col)) {
+        const val = sanitized[col];
+        if (val === '' || val === undefined) {
+          sanitized[col] = null;
+        }
+      }
+    }
+    if (sanitized.created_by && !this.isUuid(String(sanitized.created_by))) {
+      sanitized.created_by = null;
+    }
+    return sanitized;
+  }
+
+  private formatTimeExpenseRestError(action: 'create' | 'update' | 'delete', status: number, errText: string): Error {
+    let parsed: { code?: string; message?: string; details?: string } | null = null;
+    try {
+      parsed = JSON.parse(errText);
+    } catch {
+      parsed = null;
+    }
+    if (parsed?.code === '23505' || /time_expenses_org_rfq_code_idx|duplicate key/i.test(errText)) {
+      return new Error('An expense record with this RFQ / F.R. code already exists in this organization.');
+    }
+    if (status === 401 || status === 403 || parsed?.code === '42501' || /row-level security/i.test(errText)) {
+      return new Error('You do not have permission to save time and expense records for this organization, or your session has expired.');
+    }
+    if (parsed?.message) {
+      return new Error(`Failed to ${action} time expense: ${parsed.message}`);
+    }
+    return new Error(`Failed to ${action} time expense: ${status} ${errText}`);
+  }
+
+  private isRecoverableTimeExpenseFunctionError(error: unknown): boolean {
+    const status = (error as { status?: number })?.status;
+    if (status === 404 || status === 502 || status === 503 || status === 504) {
+      return true;
+    }
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    return /failed to fetch|networkerror|load failed|edge function|functions\/v1|not_found|function not found|name resolution|cors|err_connection|econnrefused|timed out/i.test(message);
+  }
+
   async createTimeExpense(expense: any): Promise<any> {
     const filtered = this.filterToTableSchema('time_expenses', this.camelToSnake(expense), true);
     if (!filtered.org_id) {
@@ -3329,8 +3348,20 @@ export class SupabaseDataService implements IDataService {
       const result = await this.timeExpenseRequest('create', { orgId: filtered.org_id, expense });
       return this.snakeToCamel(result.expense);
     } catch (err) {
-      console.warn('[Supabase] time-expenses-write edge function unavailable; using REST insert fallback.', err);
-      return this.createTimeExpenseViaRest(expense, filtered.org_id);
+      const code = (err as { code?: string })?.code;
+      const message = err instanceof Error ? err.message : String(err ?? '');
+      if (code === '23505' || /already exists|duplicate key|time_expenses_org_rfq_code_idx/i.test(message)) {
+        throw new Error('An expense record with this RFQ / F.R. code already exists in this organization.');
+      }
+      console.warn('[Supabase] time-expenses-write edge function failed or unavailable; attempting REST insert fallback.', err);
+      try {
+        return await this.createTimeExpenseViaRest(expense, filtered.org_id);
+      } catch (restErr) {
+        if (this.isRecoverableTimeExpenseFunctionError(err)) {
+          throw restErr;
+        }
+        throw err;
+      }
     }
   }
 
@@ -3338,15 +3369,18 @@ export class SupabaseDataService implements IDataService {
     const snake = this.camelToSnake(expense);
     const quantity = Number(snake.quantity || 0);
     const unitCost = Number(snake.unit_cost || 0);
-    const amount = Number(snake.amount) || Math.round(quantity * unitCost * 100) / 100;
-    const payload = this.filterToTableSchema('time_expenses', {
-      ...snake,
-      org_id: orgId,
-      quantity,
-      unit_cost: unitCost,
-      amount,
-      status: snake.status || 'open',
-    });
+    const amount = Math.round(quantity * unitCost * 100) / 100;
+    const payload = this.sanitizeTimeExpensePayload(
+      this.filterToTableSchema('time_expenses', {
+        ...snake,
+        org_id: orgId,
+        quantity,
+        unit_cost: unitCost,
+        amount,
+        status: snake.status || 'open',
+      }, true),
+      true
+    );
 
     const response = await fetch(`${this.baseUrl}/time_expenses`, {
       method: 'POST',
@@ -3359,7 +3393,7 @@ export class SupabaseDataService implements IDataService {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Failed to create time expense: ${response.status} ${errText}`);
+      throw this.formatTimeExpenseRestError('create', response.status, errText);
     }
 
     const rows = await response.json();
@@ -3375,8 +3409,20 @@ export class SupabaseDataService implements IDataService {
       const result = await this.timeExpenseRequest('update', { id, updates });
       return this.snakeToCamel(result.expense);
     } catch (err) {
-      console.warn('[Supabase] time-expenses-write edge function unavailable; using REST update fallback.', err);
-      return this.updateTimeExpenseViaRest(id, updates);
+      const code = (err as { code?: string })?.code;
+      const message = err instanceof Error ? err.message : String(err ?? '');
+      if (code === '23505' || /already exists|duplicate key|time_expenses_org_rfq_code_idx/i.test(message)) {
+        throw new Error('An expense record with this RFQ / F.R. code already exists in this organization.');
+      }
+      console.warn('[Supabase] time-expenses-write edge function failed or unavailable; attempting REST update fallback.', err);
+      try {
+        return await this.updateTimeExpenseViaRest(id, updates);
+      } catch (restErr) {
+        if (this.isRecoverableTimeExpenseFunctionError(err)) {
+          throw restErr;
+        }
+        throw err;
+      }
     }
   }
 
@@ -3389,7 +3435,10 @@ export class SupabaseDataService implements IDataService {
         snake.amount = Math.round(quantity * unitCost * 100) / 100;
       }
     }
-    const payload = this.filterToTableSchema('time_expenses', snake);
+    const payload = this.sanitizeTimeExpensePayload(
+      this.filterToTableSchema('time_expenses', snake),
+      false
+    );
 
     const response = await fetch(`${this.baseUrl}/time_expenses?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -3402,11 +3451,14 @@ export class SupabaseDataService implements IDataService {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Failed to update time expense: ${response.status} ${errText}`);
+      throw this.formatTimeExpenseRestError('update', response.status, errText);
     }
 
     const rows = await response.json();
     const updated = Array.isArray(rows) ? rows[0] : rows;
+    if (!updated) {
+      throw new Error('Expense record could not be updated. Verify that the expense is still open and you have permission for this organization.');
+    }
     return this.snakeToCamel(updated);
   }
 
@@ -3417,8 +3469,15 @@ export class SupabaseDataService implements IDataService {
     try {
       await this.timeExpenseRequest('delete', { id });
     } catch (err) {
-      console.warn('[Supabase] time-expenses-write edge function unavailable; using REST delete fallback.', err);
-      return this.deleteTimeExpenseViaRest(id);
+      console.warn('[Supabase] time-expenses-write edge function failed or unavailable; attempting REST delete fallback.', err);
+      try {
+        return await this.deleteTimeExpenseViaRest(id);
+      } catch (restErr) {
+        if (this.isRecoverableTimeExpenseFunctionError(err)) {
+          throw restErr;
+        }
+        throw err;
+      }
     }
   }
 
@@ -3430,7 +3489,7 @@ export class SupabaseDataService implements IDataService {
 
     if (!response.ok) {
       const errText = await response.text();
-      throw new Error(`Failed to delete time expense: ${response.status} ${errText}`);
+      throw this.formatTimeExpenseRestError('delete', response.status, errText);
     }
   }
 
@@ -3446,7 +3505,12 @@ export class SupabaseDataService implements IDataService {
       body: JSON.stringify({ action, ...payload }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result.error || `Time expense request failed (${response.status})`);
+    if (!response.ok) {
+      const error = new Error(result.error || `Time expense request failed (${response.status})`) as Error & { status?: number; code?: string };
+      error.status = response.status;
+      if (result.code) error.code = result.code;
+      throw error;
+    }
     return result;
   }
 
@@ -6603,6 +6667,13 @@ export class SupabaseDataService implements IDataService {
           throw new Error('Posted invoices cannot be moved back to draft/on-hold status.');
         }
       }
+    } else {
+      const clearableDraftUuidFields = ['sponsor_id', 'student_id', 'enrollment_id', 'assessment_registration_id', 'batch_id'];
+      clearableDraftUuidFields.forEach(field => {
+        if (Object.prototype.hasOwnProperty.call(snakeCaseUpdates, field) && (snakeCaseUpdates[field] === undefined || snakeCaseUpdates[field] === '')) {
+          filteredUpdates[field] = null;
+        }
+      });
     }
 
     let savedLines: any[] | undefined;
@@ -6671,6 +6742,34 @@ export class SupabaseDataService implements IDataService {
       throw new Error(`Failed to fetch invoices by org: ${response.status} ${await response.text()}`);
     }
     return this.snakeToCamel(await response.json());
+  }
+
+  async getInvoiceCreatorNames(orgId: string): Promise<Record<string, string>> {
+    if (!orgId) return {};
+    try {
+      const response = await fetch(`${this.baseUrl}/rpc/get_org_invoice_creator_names`, {
+        method: 'POST',
+        headers: await this.getHeaders(),
+        body: JSON.stringify({ p_org_id: orgId })
+      });
+      if (!response.ok) {
+        return {};
+      }
+      const rows = await response.json();
+      if (!Array.isArray(rows)) return {};
+      const creatorMap: Record<string, string> = {};
+      rows.forEach((row: any) => {
+        const displayName = String(row?.display_name ?? row?.displayName ?? '').trim();
+        if (!displayName) return;
+        const userId = String(row?.user_id ?? row?.userId ?? '').trim();
+        const authUid = String(row?.auth_uid ?? row?.authUid ?? '').trim();
+        if (userId) creatorMap[userId] = displayName;
+        if (authUid) creatorMap[authUid] = displayName;
+      });
+      return creatorMap;
+    } catch {
+      return {};
+    }
   }
 
   async getInvoiceById(id: string): Promise<any | null> {

@@ -57,10 +57,12 @@ export type ModuleTab =
   | 'ar-calendar-tasks'
   | 'credit-debit-memo'
   | 'write-off'
+  | 'reclassify'
   | 'aging-report'
   | 'soa'
   | 'customer-ledger'
   | 'collection-receipt'
+  | 'collection-report'
   | 'recurring-invoices'
   | 'revenue-recognition'
   // AP Modules
@@ -126,13 +128,15 @@ const ROLE_PERMISSIONS: Record<UserRole, ModuleTab[]> = {
   // SYSTEM_ADMIN: Full platform access
   SYSTEM_ADMIN: [
     'dashboard', 'ledger', 'journal-vouchers', 'ap-journal-vouchers', 'vendor-ledger', 'reports', 'banking', 'checks',
-    'ar', 'recurring-invoices', 'revenue-recognition',
+    'ar', 'invoices', 'non-invoice-payments', 'payments', 'customers', 'bank-deposits', 'ar-calendar-tasks',
+    'credit-debit-memo', 'write-off', 'reclassify', 'aging-report', 'soa', 'customer-ledger', 'collection-receipt', 'collection-report',
+    'recurring-invoices', 'revenue-recognition',
     'payables', 'ap-memos', 'ap-reclassifications', 'ap-aging-report', 'time-expenses', 'po', 'goods-receipt', 'recurring-bills',
     'payroll', 'budgets',
     'sponsors', 'vendors', 'items', 'assets',
-    'inventory', 'warehouse-locations', 'stock-items', 'stock-levels', 'stock-adjustments', 'reorder-points', 'inventory-transactions',
+    'inventory', 'warehouse-locations', 'stock-items', 'inventory-classes', 'opening-inventory', 'stock-levels', 'stock-adjustments', 'reorder-points', 'inventory-transactions', 'inventory-reports',
     'students', 'trainers', 'qualifications', 'batches', 'transcripts', 'locations', 'schedules',
-    'enrollments', 'course-fees', 'alumni-reports',
+    'enrollments', 'assessment-registrations', 'course-fees', 'alumni-reports',
     'employees', 'employee-directory', 'coa', 'periods', 'branding', 'subscription', 'payment-history', 'users', 'audit',
     'maintenance', 'backup-restore', 'tenant-mgmt', 'schema', 'payment-monitoring', 'feedback'
   ],
@@ -140,13 +144,15 @@ const ROLE_PERMISSIONS: Record<UserRole, ModuleTab[]> = {
   // ADMIN: Full organization access (no system admin modules)
   ADMIN: [
     'dashboard', 'ledger', 'journal-vouchers', 'ap-journal-vouchers', 'vendor-ledger', 'reports', 'banking', 'checks',
-    'invoices', 'non-invoice-payments', 'payments', 'customers', 'bank-deposits', 'recurring-invoices', 'revenue-recognition',
+    'ar', 'invoices', 'non-invoice-payments', 'payments', 'customers', 'bank-deposits', 'ar-calendar-tasks',
+    'credit-debit-memo', 'write-off', 'reclassify', 'aging-report', 'soa', 'customer-ledger', 'collection-receipt', 'collection-report',
+    'recurring-invoices', 'revenue-recognition',
     'payables', 'ap-memos', 'ap-reclassifications', 'ap-aging-report', 'time-expenses', 'po', 'goods-receipt', 'recurring-bills',
     'payroll', 'budgets',
     'sponsors', 'vendors', 'items', 'assets',
-    'inventory', 'warehouse-locations', 'stock-items', 'stock-levels', 'stock-adjustments', 'reorder-points', 'inventory-transactions',
+    'inventory', 'warehouse-locations', 'stock-items', 'inventory-classes', 'opening-inventory', 'stock-levels', 'stock-adjustments', 'reorder-points', 'inventory-transactions', 'inventory-reports',
     'students', 'trainers', 'qualifications', 'batches', 'transcripts', 'locations', 'schedules', 'alumni-reports',
-    'enrollments', 'course-fees',
+    'enrollments', 'assessment-registrations', 'course-fees',
     'employees', 'employee-directory', 'coa', 'periods', 'branding', 'subscription', 'payment-history', 'users', 'audit', 'feedback'
   ],
 
@@ -193,10 +199,12 @@ const ROLE_PERMISSIONS: Record<UserRole, ModuleTab[]> = {
     'payments',
     'credit-debit-memo',
     'write-off',
+    'reclassify',
     'aging-report',
     'soa',
     'customer-ledger',
     'collection-receipt',
+    'collection-report',
     'inventory',
     'warehouse-locations',
     'stock-items',
@@ -275,7 +283,7 @@ const ROLE_PERMISSIONS: Record<UserRole, ModuleTab[]> = {
 // ===== Module Groups for Sidebar Sections =====
 export const MODULE_GROUPS = {
   FINANCIAL_CORE: ['dashboard', 'ledger', 'reports', 'banking', 'checks'] as ModuleTab[],
-  AR_MODULES: ['ar', 'ar-calendar-tasks', 'recurring-invoices', 'revenue-recognition', 'enrollments', 'course-fees'] as ModuleTab[],
+  AR_MODULES: ['ar', 'invoices', 'non-invoice-payments', 'payments', 'bank-deposits', 'customers', 'ar-calendar-tasks', 'credit-debit-memo', 'write-off', 'reclassify', 'aging-report', 'soa', 'customer-ledger', 'collection-receipt', 'collection-report', 'recurring-invoices', 'revenue-recognition', 'enrollments', 'course-fees'] as ModuleTab[],
   AP_MODULES: ['payables', 'ap-memos', 'ap-reclassifications', 'ap-aging-report', 'time-expenses', 'po', 'goods-receipt', 'recurring-bills'] as ModuleTab[],
   PAYROLL_BUDGET: ['payroll', 'budgets'] as ModuleTab[],
   REGISTRIES: ['sponsors', 'vendors', 'items', 'assets'] as ModuleTab[],

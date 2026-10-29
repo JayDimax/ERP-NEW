@@ -1,69 +1,467 @@
-# Repository Guidelines
+# AT-ERP — Repository Guidelines
 
-## Project Overview
-AT-ERP is a React 18 + TypeScript + Vite ERP for educational and training institutions. It covers tenant administration, RBAC, accounting, accounts receivable, accounts payable, inventory, training operations, payroll, subscriptions, audit logs, backup/restore, and student/trainer portals.
+## 1. Project Context
 
-The active application entry path is `index.tsx` -> `App.tsx`. `App.tsx` owns authentication flow, tenant selection, tab routing, global state hydration, cross-module handlers, notification plumbing, and view orchestration.
+AT-ERP is a React 18 + TypeScript + Vite ERP for educational and training institutions.
 
-## Project Structure
-- `App.tsx` is the main controller/router for the SPA. Add new screens by importing a view, wiring a tab key, adding permissions where needed, and rendering the view in the main content switch.
-- `views/` contains feature screens. View files follow the `[Feature]View.tsx` pattern and receive data plus callbacks from `App.tsx`.
-- `components/` contains shared UI helpers such as notifications, pagination, modal portal, journal form, font scaling, empty states, and TESDA learner form entry.
-- `services/` contains domain logic and data access. `DataServiceFactory.ts` currently returns `SupabaseDataService`.
-- `services/IDataService.ts` is the persistence contract. Keep it aligned with `SupabaseDataService.ts` when adding entities.
-- `types.ts` is the central model catalog for entities, statuses, roles, permissions, payroll/tax types, and domain enums.
-- `config/app.ts` reads Supabase environment config and refuses unsafe local/hosted mismatches.
-- `config/permissions.ts` defines module access, role groups, default tabs, and action permissions.
-- `accountingService.ts` contains ledger summaries, trial balance, balance sheet, income statement, account balances, and closing-entry helpers.
-- `db.ts` holds empty initial arrays and a chart of accounts template for fallback/mock-style initialization.
-- `supabase/migrations/` contains database changes. Some files are disabled with `.disabled`; do not assume disabled migrations have been applied.
-- `supabase/functions/` contains service-role Edge Functions for privileged writes.
-- `src/` contains duplicated inventory/backup service/view files plus `src/index.css`; root-level `views/` and `services/` are the active app paths unless imported otherwise.
+Core domains include:
+- Tenant administration
+- RBAC
+- Accounting / GL
+- Accounts Receivable
+- Accounts Payable
+- Inventory
+- Training operations
+- Payroll
+- Subscriptions
+- Audit logs
+- Backup / restore
+- Student and trainer portals
 
-## Commands
-- `npm run dev` starts the Vite dev server.
-- `npm run build` builds production assets into `dist/`.
-- `npm run preview` serves the production build locally.
-- `npm test` runs Vitest.
-- `npm test -- tests/InvoicesView.test.tsx --run` runs one test file once.
-- `npm run test:watch` runs Vitest in watch mode.
+Backend persistence uses Supabase.
 
-## Coding Conventions
-- Use React function components with TypeScript and the `react-jsx` transform.
-- Keep feature screens in `views/` and shared widgets in `components/`.
-- Prefer models from `types.ts` instead of duplicating ad hoc shapes.
-- Keep domain calculations in services rather than embedding them deeply in JSX.
-- Keep data persistence behind `IDataService` and `DataServiceFactory`.
-- Preserve the existing camelCase TypeScript model style and snake_case Supabase table/column style. `SupabaseDataService` performs conversion.
-- Use the `@/*` alias only where it improves clarity; existing root-relative imports are common.
-- No ESLint or Prettier config is present. Match nearby formatting.
+The application entry flow is:
 
-## Supabase Notes
-- Runtime config comes from `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_APP_ENV`.
-- `SupabaseDataService` primarily uses Supabase REST endpoints and selected RPC calls.
-- Privileged writes for users, organizations, payments, and feedback tickets use Edge Functions under `supabase/functions/`.
-- Edge Functions expect `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and, where JWT validation is needed, `AT_ERP_JWT_SECRET`.
-- Soft-delete fields are common: `is_deleted`, `deleted_at`, and `deleted_by`.
-- Many screens filter by `orgId`; keep tenant isolation explicit in new queries and handlers.
+`index.tsx` → `App.tsx`
 
-## Testing Guidance
-- Existing tests use Vitest and React Testing Library.
-- Test files live in `tests/`.
-- Current coverage includes invoice terms, billing computation, student documents, AR view behavior, and invoice view behavior.
-- When touching a view, prefer focused tests around user-visible behavior and mocked service calls.
-- When touching services, prefer deterministic unit tests for calculations and state transitions.
+`App.tsx` currently handles authentication, tenant selection, tab routing, global state hydration, cross-module handlers, notifications, and view orchestration.
 
-## Important Business Constraints
-- Posted or finalized accounting documents should not be casually mutated. Invoice and journal handlers contain guards for posted/voided states.
-- Journal entries must balance debit and credit totals before posting.
-- Tenant-specific data should always be scoped by `orgId`.
-- Student and trainer users must link to the corresponding student/trainer record.
-- Sponsor, enrollment, assessment, invoice, payment, and GL records are tightly coupled; update related balances/statuses together.
-- Inventory adjustments can generate GL entries and should preserve item/location/level consistency.
-- Period closing supports AP, AR, GL, soft close, hard close, and lock states.
+---
 
-## Documentation
-- `docs/README.md` is the centralized index for all architecture, domain, operational, and roadmap documentation.
-- `docs/architecture.md` describes app structure, routing/controllers, services, models, views, and runtime flow.
-- `docs/database.md` describes schema, migrations, functions, relationships, and persistence behavior.
-- `docs/business-rules.md` captures implemented workflows and state rules.
+## 2. Primary Development Rule
+
+Prefer the **smallest correct change** that satisfies the requested task.
+
+Before creating new code:
+
+1. Inspect the directly affected files.
+2. Search for an existing implementation or pattern.
+3. Reuse existing components, services, types, utilities, and conventions.
+4. Modify existing code when appropriate instead of creating parallel abstractions.
+5. Load additional documentation only when necessary.
+
+Do not over-engineer localized changes.
+
+Do not perform repository-wide exploration when targeted inspection is sufficient.
+
+---
+
+## 3. Project Structure
+
+Use these locations as the primary source of truth:
+
+- `App.tsx` — SPA controller, routing, orchestration, global handlers.
+- `views/` — feature screens using `[Feature]View.tsx`.
+- `components/` — shared/reusable UI components.
+- `services/` — domain logic and persistence.
+- `services/IDataService.ts` — persistence contract.
+- `services/SupabaseDataService.ts` — active Supabase implementation.
+- `services/DataServiceFactory.ts` — data-service factory.
+- `types.ts` — shared entities, statuses, roles, permissions, and domain types.
+- `config/app.ts` — runtime/Supabase configuration.
+- `config/permissions.ts` — RBAC/module/action permissions.
+- `accountingService.ts` — accounting calculations and reporting helpers.
+- `db.ts` — fallback initialization and chart-of-accounts template.
+- `supabase/migrations/` — database migrations.
+- `supabase/functions/` — privileged Edge Functions.
+- `tests/` — Vitest tests.
+
+Root-level `views/` and `services/` are the active application paths unless imports prove otherwise.
+
+Do not assume similarly named files under `src/` are active.
+
+Do not assume `.disabled` migrations were applied.
+
+---
+
+## 4. Documentation Loading Rules
+
+Do **not** preload or read all documentation for every task.
+
+Start with the affected code.
+
+Load documentation selectively:
+
+### Architecture / Cross-Module Changes
+Read:
+
+`docs/architecture.md`
+
+Use when changing:
+- application structure
+- routing
+- service boundaries
+- global state
+- cross-module behavior
+- major abstractions
+
+### Database / Supabase Changes
+Read:
+
+`docs/database.md`
+
+Use when changing:
+- tables or columns
+- migrations
+- relationships
+- RLS
+- RPC
+- Edge Functions
+- persistence behavior
+- tenant-scoped queries
+
+### Business / Accounting Rules
+Read:
+
+`docs/business-rules.md`
+
+Use when changing:
+- accounting
+- AR/AP
+- invoicing
+- payments
+- payroll
+- inventory posting
+- enrollment financial workflows
+- period closing
+- state transitions
+- business validations
+
+### Documentation Discovery
+
+Use `docs/README.md` only when the correct supporting document is unclear.
+
+### Simple Changes
+
+For localized UI, text, styling, straightforward bug fixes, or isolated component changes:
+
+**Do not load domain documentation unless required to understand the behavior.**
+
+---
+
+## 5. Change Discipline
+
+Do not:
+
+- refactor unrelated code
+- redesign architecture for a localized task
+- introduce libraries without clear necessity
+- create duplicate components
+- create duplicate services
+- duplicate domain types
+- create unnecessary wrappers or abstractions
+- rename unrelated files or symbols
+- reorganize unrelated directories
+- change established patterns without reason
+- modify unrelated modules
+- silently change existing business behavior
+
+Preserve existing behavior unless the task explicitly requires changing it.
+
+If a requested change conflicts with an existing business rule or architectural constraint, identify the conflict before bypassing the rule.
+
+---
+
+## 6. Coding Conventions
+
+Use:
+
+- React function components
+- TypeScript
+- `react-jsx`
+- existing project patterns
+
+Keep feature screens in:
+
+`views/`
+
+Keep reusable UI in:
+
+`components/`
+
+Use models from:
+
+`types.ts`
+
+Do not create ad hoc duplicate entity shapes when an existing model can be extended or reused.
+
+Keep domain calculations and business logic out of JSX when practical.
+
+Persistence must remain behind:
+
+`IDataService`
+
+and the active service implementation.
+
+When adding or changing persistence operations, keep:
+
+`IDataService.ts`
+
+and:
+
+`SupabaseDataService.ts`
+
+consistent.
+
+Use:
+
+- camelCase for TypeScript models
+- snake_case for Supabase tables/columns
+
+Follow nearby formatting.
+
+Do not perform formatting-only changes outside the task.
+
+---
+
+## 7. Supabase / Tenant Safety
+
+Runtime configuration uses:
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_APP_ENV`
+
+Privileged operations may use Edge Functions from:
+
+`supabase/functions/`
+
+Common soft-delete fields include:
+
+- `is_deleted`
+- `deleted_at`
+- `deleted_by`
+
+Tenant-specific data must remain scoped by:
+
+`orgId`
+
+Never remove or weaken tenant isolation merely to simplify a query or make a feature work.
+
+Before modifying a tenant-sensitive query, verify its organization scope.
+
+Do not expose service-role credentials to client-side code.
+
+---
+
+## 8. Accounting Invariants
+
+Accounting correctness has priority over implementation convenience.
+
+Always preserve these invariants:
+
+- Journal entries must balance before posting.
+- Posted/finalized documents must not be casually mutated.
+- Existing posted/voided guards must remain enforced.
+- Financial transactions must preserve their audit trail.
+- Related balances and statuses must remain synchronized.
+- Closing/locked periods must respect existing restrictions.
+- Inventory-generated GL entries must remain consistent with inventory transactions.
+
+Never bypass an accounting validation merely to make a workflow or test pass.
+
+Prefer reversal/correction workflows over destructive modification of posted financial records where the existing architecture supports them.
+
+---
+
+## 9. Cross-Module Integrity
+
+Treat these relationships carefully:
+
+`Sponsor → Enrollment → Assessment → Invoice → Payment → GL`
+
+Changes affecting one part of this chain may affect downstream records.
+
+Before modifying these workflows:
+
+1. Trace the affected data path.
+2. Identify related state transitions.
+3. Check financial impact.
+4. Check tenant scope.
+5. Check existing tests.
+6. Update dependent balances/statuses when required by existing rules.
+
+Student and trainer users must remain linked to their corresponding records.
+
+Inventory adjustments that generate accounting entries must preserve item, location, stock-level, and GL consistency.
+
+---
+
+## 10. High-Risk Areas
+
+Treat changes involving the following as **high risk**:
+
+- journal posting
+- ledger calculations
+- trial balance
+- balance sheet
+- income statement
+- financial statements
+- AR/AP balances
+- invoices and payments
+- payroll calculations
+- tax/statutory calculations
+- inventory costing
+- inventory → GL posting
+- period closing
+- migrations
+- RLS
+- tenant isolation
+- authentication
+- RBAC
+- privileged Edge Functions
+
+For high-risk changes:
+
+1. Read the relevant business/database documentation.
+2. Inspect the existing implementation.
+3. Trace affected data flow.
+4. Identify invariants before editing.
+5. Make the smallest safe change.
+6. Add or update focused tests when behavior changes.
+7. Run relevant tests.
+8. Run the production build when appropriate.
+
+Do not perform broad refactoring as part of a high-risk fix unless explicitly requested.
+
+---
+
+## 11. Testing Strategy
+
+Tests use:
+
+- Vitest
+- React Testing Library
+
+Tests are located in:
+
+`tests/`
+
+Prefer **focused testing**, not the entire suite by default.
+
+For a view change:
+- test user-visible behavior
+- mock service calls where appropriate
+
+For service/domain changes:
+- test calculations
+- state transitions
+- validation rules
+- edge cases
+
+For accounting changes:
+- test balancing
+- posting restrictions
+- affected totals/statuses
+- relevant failure conditions
+
+Run broader tests when the change affects shared infrastructure or multiple modules.
+
+Never change a valid test simply to make an incorrect implementation pass.
+
+---
+
+## 12. Commands
+
+Development:
+
+`npm run dev`
+
+Production build:
+
+`npm run build`
+
+Tests:
+
+`npm test`
+
+Single test:
+
+`npm test -- tests/<TestFile>.test.tsx --run`
+
+Watch mode:
+
+`npm run test:watch`
+
+Prefer the narrowest relevant verification command first.
+
+---
+
+## 13. Search and Context Efficiency
+
+Minimize unnecessary context usage.
+
+For each task:
+
+1. Identify the likely affected module.
+2. Inspect the most relevant files first.
+3. Search for exact symbols/functions/components when possible.
+4. Expand investigation only when dependencies require it.
+5. Read only relevant documentation.
+6. Avoid repeatedly reading unchanged large files.
+7. Avoid scanning generated/build/vendor directories.
+8. Stop investigating once enough context exists to make the change safely.
+
+Do not read the entire repository before starting implementation.
+
+Do not reread files already understood unless new evidence requires it.
+
+---
+
+## 14. Implementation Workflow
+
+For normal tasks:
+
+**Inspect → Understand → Change → Verify → Stop**
+
+Use a short plan only when the task spans multiple files, modules, or business rules.
+
+Do not produce elaborate implementation plans for trivial changes.
+
+For complex or high-risk tasks:
+
+**Inspect → Relevant Docs → Trace Dependencies → Plan → Implement → Test → Review**
+
+Keep planning proportional to task complexity.
+
+---
+
+## 15. Completion Rules
+
+Before declaring a task complete:
+
+- requested behavior is implemented
+- existing relevant behavior is preserved
+- no unnecessary architecture was introduced
+- no unrelated files were modified
+- TypeScript/build errors caused by the change are resolved
+- relevant tests pass
+- tenant isolation remains intact
+- accounting/business invariants remain intact
+
+Report concisely:
+
+1. What changed
+2. Important files changed
+3. Verification performed
+4. Any unresolved risk or follow-up
+
+Do not provide lengthy explanations when a concise completion summary is sufficient.
+
+---
+
+## 16. Priority Order
+
+When instructions conflict, prioritize:
+
+1. Data integrity
+2. Accounting correctness
+3. Tenant isolation and security
+4. Explicit business rules
+5. Existing project architecture
+6. Existing reusable implementation
+7. Requested feature behavior
+8. Minimal implementation
+9. Code cleanliness
+
+Never sacrifice data integrity, accounting correctness, tenant isolation, or security merely to reduce code size.

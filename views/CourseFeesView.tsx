@@ -10,12 +10,6 @@ import {
   ChevronDown, RotateCcw
 } from 'lucide-react';
 
-interface Toast {
-  id: string;
-  message: string;
-  type: 'success' | 'error' | 'info';
-}
-
 interface CourseFeesViewProps {
   courseFees: CourseFee[];
   qualifications: Qualification[];
@@ -24,6 +18,7 @@ interface CourseFeesViewProps {
   onAddCourseFee: (fee: CourseFee) => void | Promise<void>;
   onUpdateCourseFee: (fee: CourseFee) => void | Promise<void>;
   onDeleteCourseFee: (id: string) => void | Promise<boolean>;
+  onNotify?: (type: 'success' | 'error' | 'info' | 'warning', message: string) => void;
 }
 
 const CATEGORY_OPTIONS: { value: CourseFeeCategory; label: string; color: string }[] = [
@@ -33,6 +28,12 @@ const CATEGORY_OPTIONS: { value: CourseFeeCategory; label: string; color: string
   { value: 'ASSESSMENT', label: 'Assessment', color: 'bg-amber-100 text-amber-700' },
   { value: 'MATERIALS', label: 'Materials', color: 'bg-rose-100 text-rose-700' },
   { value: 'MISCELLANEOUS', label: 'Miscellaneous', color: 'bg-gray-100 text-gray-700' },
+];
+
+const FUNDING_TYPE_OPTIONS: { value: CourseFeeFundingType; label: string; color: string }[] = [
+  { value: 'SPONSORED', label: 'Sponsored', color: 'bg-indigo-100 text-indigo-700' },
+  { value: 'PRIVATE', label: 'Private', color: 'bg-sky-100 text-sky-700' },
+  { value: 'TESDA_SCHOLARSHIP', label: 'TESDA Scholarship', color: 'bg-teal-100 text-teal-700' },
 ];
 
 export const getAvailableFeeCode = (
@@ -53,7 +54,7 @@ export const getAvailableFeeCode = (
 };
 
 const CourseFeesView: React.FC<CourseFeesViewProps> = ({
-  courseFees, qualifications, accounts, currency = 'PHP', onAddCourseFee, onUpdateCourseFee, onDeleteCourseFee
+  courseFees, qualifications, accounts, currency = 'PHP', onAddCourseFee, onUpdateCourseFee, onDeleteCourseFee, onNotify
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterQualification, setFilterQualification] = useState<string>('');
@@ -65,7 +66,6 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [toasts, setToasts] = useState<Toast[]>([]);
 
   // Bulk creation state
   const [showBulkModal, setShowBulkModal] = useState(false);
@@ -198,7 +198,7 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
 
   const handleBulkSubmit = async () => {
     if (!bulkContext.qualificationId || !bulkContext.fundingType) {
-      showToast('Select one qualification and one funding type for this fee schedule.', 'error');
+      onNotify?.('error', 'Select one qualification and one funding type for this fee schedule.');
       return;
     }
 
@@ -210,7 +210,7 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       Number(r.amount) > 0
     );
     const incompleteRows = startedRows
-      .map((row, index) => ({
+      .map((row) => ({
         rowNumber: bulkRows.indexOf(row) + 1,
         missing: [
           !row.feeName?.trim() && 'fee name',
@@ -222,11 +222,11 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       .filter(row => row.missing.length > 0);
 
     if (incompleteRows.length > 0) {
-      showToast(
+      onNotify?.(
+        'error',
         incompleteRows
           .map(row => `Row ${row.rowNumber}: ${row.missing.join(', ')} required`)
-          .join(' • '),
-        'error'
+          .join(' • ')
       );
       return;
     }
@@ -235,12 +235,11 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       r.feeName && r.glAccountId && r.category && Number(r.amount) > 0
     );
     if (validRows.length === 0) {
-      showToast('Please fill in at least one complete row. Course, funding type, name, amount, category, and GL account are required.', 'error');
+      onNotify?.('error', 'Please fill in at least one complete row. Course, funding type, name, amount, category, and GL account are required.');
       return;
     }
 
     setIsBulkSubmitting(true);
-    let successCount = 0;
     let errorCount = 0;
 
     const reservedCodes = new Set(courseFees.map(fee => fee.feeCode.trim().toUpperCase()));
@@ -250,17 +249,19 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       reservedCodes.add(code);
       return code;
     };
-    const errors: string[] = [];
+    const localErrors: string[] = [];
 
     try {
       for (const row of validRows) {
-        try {
-          const feeCode = (row.feeCode || getNextFeeCode(bulkContext.qualificationId)).trim().toUpperCase();
-          if (reservedCodes.has(feeCode) && row.feeCode) {
-            throw new Error(`Fee code "${feeCode}" already exists.`);
-          }
-          reservedCodes.add(feeCode);
+        const feeCode = (row.feeCode || getNextFeeCode(bulkContext.qualificationId)).trim().toUpperCase();
+        if (reservedCodes.has(feeCode) && row.feeCode) {
+          errorCount++;
+          localErrors.push(`${row.feeName}: Fee code "${feeCode}" already exists.`);
+          continue;
+        }
+        reservedCodes.add(feeCode);
 
+        try {
           const newFee: CourseFee = {
             id: generateUUID(),
             orgId: '',
@@ -279,35 +280,22 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
             createdAt: new Date().toISOString(),
           };
           await onAddCourseFee(newFee);
-          successCount++;
-        } catch (error) {
+        } catch {
           errorCount++;
-          errors.push(`${row.feeName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 
-      if (successCount > 0) {
-        showToast(`Successfully created ${successCount} course fee${successCount > 1 ? 's' : ''}${errorCount > 0 ? ` (${errorCount} failed)` : ''}.`, errorCount > 0 ? 'info' : 'success');
+      if (localErrors.length > 0) {
+        onNotify?.('error', localErrors.join(' • '));
       }
-      if (errorCount > 0) {
-        showToast(errors.join(' • '), 'error');
-      } else {
+      if (errorCount === 0) {
         setShowBulkModal(false);
       }
     } catch (error) {
-      showToast(`Bulk creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      onNotify?.('error', `Bulk creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsBulkSubmitting(false);
     }
-  };
-
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-    const id = `toast-${Date.now()}`;
-    const toast: Toast = { id, message, type };
-    setToasts(prev => [...prev, toast]);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
   };
 
   const generateFeeCode = (qualificationId: string) => {
@@ -333,18 +321,21 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       return;
     }
 
+    const feeCode = (formData.feeCode || generateFeeCode(formData.qualificationId!)).trim().toUpperCase();
+    const duplicateFee = courseFees.find(fee =>
+      fee.id !== editingFee?.id &&
+      fee.feeCode.trim().toUpperCase() === feeCode
+    );
+    if (duplicateFee) {
+      const duplicateMessage = `Fee code "${feeCode}" is already used by "${duplicateFee.feeName}".`;
+      setFormError(duplicateMessage);
+      onNotify?.('error', duplicateMessage);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const feeCode = (formData.feeCode || generateFeeCode(formData.qualificationId!)).trim().toUpperCase();
-      const duplicateFee = courseFees.find(fee =>
-        fee.id !== editingFee?.id &&
-        fee.feeCode.trim().toUpperCase() === feeCode
-      );
-      if (duplicateFee) {
-        throw new Error(`Fee code "${feeCode}" is already used by "${duplicateFee.feeName}".`);
-      }
-
       if (editingFee) {
         const updatedFee: CourseFee = {
           ...editingFee,
@@ -363,7 +354,6 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
           updatedAt: new Date().toISOString()
         };
         await onUpdateCourseFee(updatedFee);
-        showToast(`Course fee "${updatedFee.feeName}" updated successfully!`, 'success');
       } else {
         const newFee: CourseFee = {
           id: generateUUID(),
@@ -383,7 +373,6 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
           createdAt: new Date().toISOString()
         };
         await onAddCourseFee(newFee);
-        showToast(`Course fee "${newFee.feeName}" created successfully!`, 'success');
       }
 
       setShowModal(false);
@@ -392,7 +381,6 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
       console.error('Error saving course fee:', error);
       const message = error instanceof Error ? error.message : 'Unknown error';
       setFormError(message);
-      showToast(`Failed to save course fee: ${message}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -401,19 +389,11 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this course fee?')) return;
 
-    const feeToDelete = courseFees.find(f => f.id === id);
-    const feeName = feeToDelete?.feeName || 'Unknown';
-
     setDeletingId(id);
     try {
-      const result = await onDeleteCourseFee(id);
-      if (result === false) {
-        showToast('Cannot delete course fee: It may be in use.', 'error');
-      } else {
-        showToast(`Course fee "${feeName}" deleted successfully!`, 'success');
-      }
+      await onDeleteCourseFee(id);
     } catch (error) {
-      showToast(`Failed to delete: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      onNotify?.('error', `Failed to delete: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDeletingId(null);
     }
@@ -453,6 +433,22 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
     return (
       <span className={`text-xs font-semibold px-2 py-0.5 rounded ${cat.color}`}>
         {cat.label}
+      </span>
+    );
+  };
+
+  const getFundingTypeBadge = (fundingType?: CourseFeeFundingType) => {
+    const option = FUNDING_TYPE_OPTIONS.find(f => f.value === fundingType);
+    if (!option) {
+      return (
+        <span className="inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded bg-gray-100 text-gray-500">
+          Unclassified
+        </span>
+      );
+    }
+    return (
+      <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded ${option.color}`}>
+        {option.label}
       </span>
     );
   };
@@ -613,6 +609,7 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
             <tr>
               <th className="px-4 py-3 text-left text-[13px] font-bold text-white">Fee Details</th>
               <th className="px-4 py-3 text-left text-[13px] font-bold text-white">Course</th>
+              <th className="px-4 py-3 text-left text-[13px] font-bold text-white">Funding Type</th>
               <th className="px-4 py-3 text-right text-[13px] font-bold text-white">Amount</th>
               <th className="px-4 py-3 text-left text-[13px] font-bold text-white">GL Account</th>
               <th className="px-4 py-3 text-left text-[13px] font-bold text-white">Tax/EWT</th>
@@ -642,6 +639,9 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
                       <span className="block truncate max-w-[200px]">{getQualificationName(fee.qualificationId)}</span>
                     </div>
                   </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {getFundingTypeBadge(fee.fundingType)}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="text-sm font-semibold text-brand font-mono">
@@ -699,7 +699,7 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
               </tr>
             )) : (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-12 text-center text-gray-500">
                   <FileText size={40} className="mx-auto mb-2 text-gray-300" />
                   {hasActiveFilters
                     ? 'Try adjusting your search or filters.'
@@ -1154,39 +1154,7 @@ const CourseFeesView: React.FC<CourseFeesViewProps> = ({
 </ModalPortal>
       )}
 
-      {/* Toast Notifications */}
-      {toasts.length > 0 && (
-        <ModalPortal>
-        <div className="fixed top-4 right-4 z-[200] flex w-[calc(100%-2rem)] max-w-md flex-col gap-2">
-          {toasts.map((toast) => (
-            <div
-              key={toast.id}
-              className={`px-4 py-3 rounded shadow-lg border flex items-start gap-2 animate-in slide-in-from-right duration-300 ${toast.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : toast.type === 'error'
-                  ? 'bg-rose-50 text-rose-800 border-rose-200'
-                  : 'bg-brand/10 text-brand border-brand-light'
-                }`}
-            >
-              {toast.type === 'success' ? (
-                <CheckCircle size={18} className="text-emerald-600" />
-              ) : toast.type === 'error' ? (
-                <AlertCircle size={18} className="text-rose-600" />
-              ) : (
-                <AlertCircle size={18} className="text-brand" />
-              )}
-              <span className="min-w-0 flex-1 break-words text-sm font-semibold">{toast.message}</span>
-              <button
-                onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-        </ModalPortal>
-      )}
+
     </div>
   );
 };

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Student, StudentDocument, Batch, Qualification } from '../types';
+import { Student, StudentDocument, Batch, Qualification, isProvisionalStudent } from '../types';
 import ModalPortal from '../components/ModalPortal';
 import TesdaLearnerFormEntry from '../components/TesdaLearnerFormEntry';
 import {
@@ -67,6 +67,7 @@ const PSGC_VERSION = 'Q2_2024';
 const PSGC_TOKEN = import.meta.env.VITE_PSA_PSGC_TOKEN || '';
 
 function withAlpha(hex: string, alpha: number): string {
+  if (!hex) return '';
   const normalized = hex.replace('#', '');
   if (!/^[\da-fA-F]{6}$/.test(normalized)) return hex;
   const r = parseInt(normalized.slice(0, 2), 16);
@@ -232,7 +233,7 @@ function buildLearnerProfilePrintHtml(student: Student, courseName: string): str
 const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = [], qualifications = [], brandColor, onAddStudent, onUpdateStudent, onDeleteStudent, onBatchAddStudents, canCreateStudent = true, canEditStudent = true }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [complianceFilter, setComplianceFilter] = useState<'ALL' | 'COMPLIANT' | 'PENDING' | 'REJECTED'>('ALL');
+  const [complianceFilter, setComplianceFilter] = useState<'ALL' | 'COMPLIANT' | 'PENDING' | 'REJECTED' | 'PROVISIONAL'>('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'all' | 'batch'>('all');
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -241,6 +242,9 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const provisionalStudentsCount = useMemo(() => {
+    return students.filter(isProvisionalStudent).length;
+  }, [students]);
   const [importPreview, setImportPreview] = useState<Student[]>([]);
   const [importErrors, setImportErrors] = useState<LearnerCsvError[]>([]);
   const [importTotalRows, setImportTotalRows] = useState(0);
@@ -557,6 +561,12 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
 
     if (complianceFilter !== 'ALL') {
       base = base.filter(student => {
+        if (complianceFilter === 'PROVISIONAL') {
+          return isProvisionalStudent(student);
+        }
+        if (isProvisionalStudent(student)) {
+          return false;
+        }
         const docs = getComplianceDocuments(student);
         const verifiedCount = docs.filter(d => d.status === 'VERIFIED').length;
         const pendingCount = docs.filter(d => d.status === 'PENDING' || d.status === 'UPLOADED').length;
@@ -1045,6 +1055,7 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
               className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded text-sm font-semibold text-gray-700 focus:border-brand outline-none transition-all"
             >
               <option value="ALL">All compliance statuses</option>
+              <option value="PROVISIONAL">Billed by AR (Pending Registration)</option>
               <option value="COMPLIANT">Compliant</option>
               <option value="PENDING">Pending docs</option>
               <option value="REJECTED">Rejected docs</option>
@@ -1069,6 +1080,28 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
           </div>
         </div>
       </div>
+
+      {/* Provisional Learners Alert Banner */}
+      {provisionalStudentsCount > 0 && complianceFilter !== 'PROVISIONAL' && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              {provisionalStudentsCount} unregistered learner{provisionalStudentsCount > 1 ? 's were' : ' was'} billed by AR and require{provisionalStudentsCount === 1 ? 's' : ''} official registration.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setComplianceFilter('PROVISIONAL');
+              setCurrentPage(1);
+            }}
+            className="px-3 py-1 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors shadow-xs"
+          >
+            Review Provisional Learners
+          </button>
+        </div>
+      )}
 
       <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -1120,16 +1153,47 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                         )}
                       </div>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-gray-800 leading-tight">
-                          {student.lastName.toUpperCase()}, {student.firstName}
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-gray-800 leading-tight">
+                            {student.lastName.toUpperCase()}, {student.firstName}
+                          </div>
+                          {isProvisionalStudent(student) && (
+                            <span className="shrink-0 text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded">
+                              Billed by AR (Provisional)
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs font-mono font-bold mt-1 uppercase" style={{ color: brandColor }}>ULI: {student.uli}</div>
+                        <div className="text-xs font-mono font-bold mt-1 uppercase" style={{ color: brandColor }}>
+                          {isProvisionalStudent(student) ? (
+                            <span className="text-amber-600 font-sans font-medium">Pending Registration</span>
+                          ) : (
+                            `ULI: ${student.uli || '—'}`
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col gap-1.5">
-                      {isCompliant ? (
+                      {isProvisionalStudent(student) ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-fit">
+                            <Clock size={10} /> Pending Full Registration
+                          </span>
+                          {canEditStudent && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditStudent(student);
+                              }}
+                              className="px-2 py-0.5 text-xs font-semibold text-brand hover:text-brand-hover bg-brand/10 hover:bg-brand/20 rounded border border-brand/30 transition-colors"
+                            >
+                              Complete Registration
+                            </button>
+                          )}
+                        </div>
+                      ) : isCompliant ? (
                         <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase text-brand bg-brand/10 px-2 py-0.5 rounded border border-brand-light w-fit">
                           <Check size={10} /> Qualified
                         </span>
@@ -1361,11 +1425,13 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                   </h3>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-mono font-semibold text-brand uppercase tracking-wide bg-brand/10 px-2 py-0.5 rounded">ULI: {auditStudent.uli}</span>
-                    <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded border ${(getComplianceDocuments(auditStudent).filter(d => d.status === 'VERIFIED').length === getComplianceDocuments(auditStudent).length || auditStudent.isEnrollmentOverridden)
+                    <span className={`text-xs font-semibold uppercase px-2 py-0.5 rounded border ${isProvisionalStudent(auditStudent)
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : (getComplianceDocuments(auditStudent).filter(d => d.status === 'VERIFIED').length === getComplianceDocuments(auditStudent).length || auditStudent.isEnrollmentOverridden)
                       ? 'bg-emerald-50 text-brand border-emerald-100'
                       : 'bg-brand/10 text-brand border-brand-light'
                       }`}>
-                      {auditStudent.isEnrollmentOverridden ? 'ADMIN OVERRIDE ACTIVE' : 'STANDARD REGISTRY'}
+                      {isProvisionalStudent(auditStudent) ? 'PROVISIONAL (AR BILLED)' : (auditStudent.isEnrollmentOverridden ? 'ADMIN OVERRIDE ACTIVE' : 'STANDARD REGISTRY')}
                     </span>
                   </div>
                 </div>
@@ -1381,12 +1447,32 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                 {canEditStudent && <button
                   onClick={() => openEditStudent(auditStudent, true)}
                   className="inline-flex items-center gap-2 px-4 py-3 text-white rounded text-xs font-semibold uppercase tracking-wide transition-colors shadow-sm"
-                  style={{ backgroundColor: brandColor }}
+                  style={{ backgroundColor: isProvisionalStudent(auditStudent) ? '#d97706' : brandColor }}
                 >
-                  <RefreshCw size={16} /> Edit
+                  <RefreshCw size={16} /> {isProvisionalStudent(auditStudent) ? 'Complete Registration' : 'Edit'}
                 </button>}
               </div>
             </div>
+
+            {isProvisionalStudent(auditStudent) && (
+              <div className="mx-5 my-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-900">Billed by AR — Pending Official Registration</p>
+                    <p className="text-xs text-amber-700">This learner was created during AR invoice billing. Official ULI, date of birth, address, and TESDA compliance documents are pending.</p>
+                  </div>
+                </div>
+                {canEditStudent && (
+                  <button
+                    onClick={() => openEditStudent(auditStudent, true)}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs shrink-0 transition-colors"
+                  >
+                    Complete Registration
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="flex flex-col md:flex-row">
               {/* Left Column: Comprehensive Profile */}
@@ -1812,8 +1898,14 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                       <div className="flex items-center gap-4">
                         <div className="p-2.5 bg-brand text-white rounded shadow-sm shadow-brand/20"><RefreshCw size={20} /></div>
                         <div>
-                          <h3 className="text-base font-semibold text-gray-800 uppercase tracking-tight">Edit Student Record</h3>
-                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">Update {editingStudent.firstName} {editingStudent.lastName}'s Information</p>
+                          <h3 className="text-base font-semibold text-gray-800 uppercase tracking-tight">
+                            {isProvisionalStudent(editingStudent) ? 'Complete Learner Registration' : 'Edit Student Record'}
+                          </h3>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mt-1">
+                            {isProvisionalStudent(editingStudent)
+                              ? `Billed by AR as Provisional Learner • Finalize Registration for ${editingStudent.firstName} ${editingStudent.lastName}`
+                              : `Update ${editingStudent.firstName} ${editingStudent.lastName}'s Information`}
+                          </p>
                         </div>
                       </div>
                       <button onClick={() => { setShowEditModal(false); setEditingStudent(null); setEditPhotoPreview(null); setShowEditCamera(false); }} className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded hover:bg-gray-50 text-gray-600 transition-colors text-xs font-semibold uppercase tracking-wide">
@@ -1824,20 +1916,30 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                     <form onSubmit={(e) => {
                       e.preventDefault();
                       try {
-                        const updatedDocuments = editingStudent.documents || [];
+                        const wasProvisional = isProvisionalStudent(editingStudent);
+                        const rawDocs = editingStudent.documents || [];
+                        const updatedDocuments = wasProvisional
+                          ? rawDocs.filter(d => d.id !== 'doc-provisional' && !d.id?.startsWith('doc-provisional') && d.name !== 'Provisional AR Registration')
+                          : rawDocs;
 
                         const updatedStudent: Student = {
                           ...editingStudent,
                           ...formData,
                           id: editingStudent.id,
                           orgId: editingStudent.orgId,
+                          registrationStatus: 'REGISTERED',
                           profilePhoto: editPhotoPreview ?? editingStudent.profilePhoto,
                           documents: updatedDocuments,
                           createdAt: editingStudent.createdAt,
                           createdBy: editingStudent.createdBy
                         } as Student;
                         onUpdateStudent(updatedStudent);
-                        showToast(`Student ${formData.firstName} ${formData.lastName} updated successfully!`, 'success');
+                        showToast(
+                          wasProvisional
+                            ? `Registration completed successfully for ${formData.firstName} ${formData.lastName}!`
+                            : `Student ${formData.firstName} ${formData.lastName} updated successfully!`,
+                          'success'
+                        );
                         setShowEditModal(false);
                         setEditingStudent(null);
                         setEditPhotoPreview(null);
@@ -1845,6 +1947,18 @@ const StudentsView: React.FC<StudentsViewProps> = ({ orgId, students, batches = 
                         showToast(`Failed to update student: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
                       }
                     }} className="p-5 space-y-4 [&_input]:px-3 [&_input]:py-2 [&_select]:px-3 [&_select]:py-2 [&_input]:text-xs [&_select]:text-xs [&_label]:text-[10px] [&_label]:leading-tight">
+                      {isProvisionalStudent(editingStudent) && (
+                        <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3 text-amber-900 text-xs">
+                          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-bold text-amber-900">Provisional Learner (Billed by AR)</p>
+                            <p className="mt-0.5 text-amber-700">
+                              This learner record was created in Accounts Receivable during billing before official registration.
+                              Fill in the missing registration details (ULI, date of birth, address, educational attainment) and save to finalize full registration.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <p className="text-[11px] leading-4 text-gray-500">
                         Fields marked <span className="font-semibold text-red-500" aria-hidden="true">*</span> are required.
                       </p>

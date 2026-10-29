@@ -32,6 +32,7 @@ describe('InvoicesView tax category dropdown', () => {
     vi.spyOn(SupabaseDataService.prototype, 'fetchPage').mockResolvedValue({
       rows: [], total: 0, page: 1, pageSize: 25, totalPages: 0
     });
+    vi.spyOn(SupabaseDataService.prototype, 'getInvoiceCreatorNames').mockResolvedValue({});
     vi.spyOn(SupabaseDataService.prototype, 'fetchTaxCategories').mockResolvedValue([
       { id: 'tc1', orgId: 'org1', code: 'VAT', description: 'VAT goods', taxType: 'VAT', rate: 12, isInclusive: false, outputAccountId: '', createdAt: '' },
       { id: 'tc2', orgId: 'org1', code: 'EXEMPT', description: 'Tax exempt', taxType: 'EXEMPT', rate: 0, isInclusive: false, outputAccountId: '', createdAt: '' }
@@ -285,6 +286,554 @@ describe('InvoicesView tax category dropdown', () => {
     expect(screen.getByText(/^VAT:$/i).nextSibling).toHaveTextContent('10.71');
     // grand total should equal the gross base of 100
     expect(screen.getByText(/Grand Total:/i).nextSibling).toHaveTextContent('100');
+  });
+
+  it('maps all active course fees and populates all line fields in Non-Invoice Payment form', async () => {
+    const onAddInvoice = vi.fn();
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="NON_INVOICE_PAYMENT"
+        onAddInvoice={onAddInvoice}
+        sponsors={[
+          { id: 'cust-1', orgId: 'org1', name: 'Walk-in Customer', customerType: 'INDIVIDUAL', createdAt: '' }
+        ]}
+        qualifications={[
+          { id: 'qual-forklift', orgId: 'org1', code: 'FORKLIFT-NC2', name: 'Forklift Operation NC II', durationDays: 10, createdAt: '' },
+          { id: 'qual-bpp', orgId: 'org1', code: 'BPP-NC2', name: 'Bread and Pastry Production NC II', durationDays: 18, createdAt: '' }
+        ]}
+        accounts={[
+          { id: 'acc-cash', orgId: 'org1', code: '1010', name: 'Cash on Hand', class: 'ASSET', isHeader: false, createdAt: '' },
+          { id: 'acc-tuition', orgId: 'org1', code: '4100', name: 'Tuition Fee Income', class: 'REVENUE', isHeader: false, createdAt: '' },
+          { id: 'acc-assess', orgId: 'org1', code: '4114', name: 'Assessment Fee Income', class: 'REVENUE', isHeader: false, createdAt: '' }
+        ]}
+        courseFees={[
+          {
+            id: 'fee-priv',
+            orgId: 'org1',
+            feeCode: 'FORKLIFT-003',
+            qualificationId: 'qual-forklift',
+            fundingType: 'PRIVATE',
+            feeName: 'FORKLIFT NC2 TUITION FEE',
+            amount: 45000,
+            glAccountId: 'acc-tuition',
+            taxCategoryId: 'tc2',
+            isSubjectToEwt: false,
+            category: 'TUITION',
+            isActive: true,
+            createdAt: ''
+          },
+          {
+            id: 'fee-spon',
+            orgId: 'org1',
+            feeCode: 'BPP-002',
+            qualificationId: 'qual-bpp',
+            fundingType: 'SPONSORED',
+            feeName: 'BREAD AND PASTRY NCII ASSESSMENT FEE',
+            amount: 1755,
+            glAccountId: 'acc-assess',
+            taxCategoryId: '',
+            isSubjectToEwt: false,
+            category: 'ASSESSMENT',
+            isActive: true,
+            createdAt: ''
+          },
+          {
+            id: 'fee-inactive',
+            orgId: 'org1',
+            feeCode: 'OLD-001',
+            qualificationId: 'qual-bpp',
+            fundingType: 'PRIVATE',
+            feeName: 'INACTIVE LEGACY FEE',
+            amount: 500,
+            glAccountId: 'acc-tuition',
+            isSubjectToEwt: false,
+            isActive: false,
+            createdAt: ''
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText(/New Non-Invoice Payment/i));
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+
+    const courseFeeCombobox = screen.getByRole('combobox', { name: /Search course fee by name or code/i });
+    fireEvent.focus(courseFeeCombobox);
+
+    // Lists all active course fees across qualifications and funding types with feeName first, excluding inactive ones
+    expect(screen.getByRole('option', { name: /BREAD AND PASTRY NCII ASSESSMENT FEE - BPP-002/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /OLD-001/i })).toBeNull();
+
+    // Select first fee and verify full field mapping
+    fireEvent.click(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i }));
+    expect(courseFeeCombobox).toHaveValue('FORKLIFT NC2 TUITION FEE - FORKLIFT-003');
+    expect(screen.getByText('FORKLIFT-NC2')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Description')).toHaveValue('Tuition');
+    expect(screen.getByRole('textbox', { name: /Unit Price line 1/i })).toHaveValue('45,000.00');
+    expect(screen.getByRole('textbox', { name: /Amount line 1/i })).toHaveValue('45,000.00');
+    expect(screen.getByRole('combobox', { name: /Tax Category line 1/i })).toHaveValue('tc2');
+    expect(screen.getByText(/4100 - Tuition Fee Income/i)).toBeInTheDocument();
+
+    // Re-focusing after selection still exposes all active course fees without requiring manual text deletion
+    fireEvent.focus(courseFeeCombobox);
+    expect(screen.getByRole('option', { name: /BREAD AND PASTRY NCII ASSESSMENT FEE - BPP-002/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i })).toBeInTheDocument();
+
+    // Save Non-Invoice Payment and verify classificationCode & mapped fields persist on the line
+    fireEvent.change(screen.getByDisplayValue('Select Sponsor'), { target: { value: 'cust-1' } });
+    fireEvent.change(screen.getByPlaceholderText('Invoice notes or memo...'), { target: { value: 'Walk-in tuition cash payment' } });
+    fireEvent.click(screen.getByTitle('Save as Draft'));
+
+    expect(onAddInvoice).toHaveBeenCalledTimes(1);
+    const savedInvoice = onAddInvoice.mock.calls[0][0] as Invoice;
+    expect(savedInvoice.documentType).toBe('NON_INVOICE_PAYMENT');
+    expect(savedInvoice.lines[0]).toMatchObject({
+      courseFeeId: 'fee-priv',
+      lineType: 'COURSE_FEE',
+      classificationCode: 'FORKLIFT-NC2',
+      description: 'Tuition',
+      glAccountId: 'acc-tuition',
+      taxCategoryId: 'tc2',
+      unitPrice: 45000,
+      amount: 45000,
+    });
+  });
+
+  it('clears mapped course fee and reverts line to MANUAL when cleared in Non-Invoice Payment form', async () => {
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="NON_INVOICE_PAYMENT"
+        qualifications={[
+          { id: 'qual-forklift', orgId: 'org1', code: 'FORKLIFT-NC2', name: 'Forklift Operation NC II', durationDays: 10, createdAt: '' }
+        ]}
+        courseFees={[
+          {
+            id: 'fee-priv',
+            orgId: 'org1',
+            feeCode: 'FORKLIFT-003',
+            qualificationId: 'qual-forklift',
+            fundingType: 'PRIVATE',
+            feeName: 'FORKLIFT NC2 TUITION FEE',
+            amount: 45000,
+            glAccountId: 'acc-tuition',
+            isSubjectToEwt: false,
+            category: 'TUITION',
+            isActive: true,
+            createdAt: ''
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText(/New Non-Invoice Payment/i));
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+
+    const courseFeeCombobox = screen.getByRole('combobox', { name: /Search course fee by name or code/i });
+    fireEvent.focus(courseFeeCombobox);
+    fireEvent.click(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i }));
+    expect(screen.getByDisplayValue('COURSE FEE')).toBeInTheDocument();
+    expect(screen.getByText('FORKLIFT-NC2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Clear selected course fee/i }));
+    expect(courseFeeCombobox).toHaveValue('');
+    expect(screen.getByDisplayValue('MANUAL')).toBeInTheDocument();
+    expect(screen.queryByText('FORKLIFT-NC2')).toBeNull();
+  });
+
+  it('supports standalone batch-independent invoices with searchable course fees, all customer types, and editable descriptions', async () => {
+    const onAddInvoice = vi.fn();
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="INVOICE"
+        onAddInvoice={onAddInvoice}
+        sponsors={[
+          { id: 'cust-corp', orgId: 'org1', name: 'Acme Logistics Corp', customerType: 'CORPORATE', createdAt: '' },
+          { id: 'spon-tesda', orgId: 'org1', name: 'TESDA Regional Office', customerType: 'SPONSOR', createdAt: '' }
+        ]}
+        qualifications={[
+          { id: 'qual-forklift', orgId: 'org1', code: 'FORKLIFT-NC2', name: 'Forklift Operation NC II', durationDays: 10, createdAt: '' },
+          { id: 'qual-bpp', orgId: 'org1', code: 'BPP-NC2', name: 'Bread and Pastry Production NC II', durationDays: 18, createdAt: '' }
+        ]}
+        accounts={[
+          { id: 'acc-ar', orgId: 'org1', code: '11110', name: 'Accounts Receivable - Sponsor', class: 'ASSET', isHeader: false, createdAt: '' },
+          { id: 'acc-tuition', orgId: 'org1', code: '4100', name: 'Tuition Fee Income', class: 'REVENUE', isHeader: false, createdAt: '' },
+          { id: 'acc-assess', orgId: 'org1', code: '4114', name: 'Assessment Fee Income', class: 'REVENUE', isHeader: false, createdAt: '' }
+        ]}
+        courseFees={[
+          {
+            id: 'fee-priv',
+            orgId: 'org1',
+            feeCode: 'FORKLIFT-003',
+            qualificationId: 'qual-forklift',
+            fundingType: 'PRIVATE',
+            feeName: 'FORKLIFT NC2 TUITION FEE',
+            amount: 45000,
+            glAccountId: 'acc-tuition',
+            taxCategoryId: 'tc2',
+            isSubjectToEwt: false,
+            category: 'TUITION',
+            isActive: true,
+            createdAt: ''
+          },
+          {
+            id: 'fee-spon',
+            orgId: 'org1',
+            feeCode: 'BPP-002',
+            qualificationId: 'qual-bpp',
+            fundingType: 'SPONSORED',
+            feeName: 'BREAD AND PASTRY NCII ASSESSMENT FEE',
+            amount: 1755,
+            glAccountId: 'acc-assess',
+            taxCategoryId: 'tc2',
+            isSubjectToEwt: false,
+            category: 'ASSESSMENT',
+            isActive: true,
+            createdAt: ''
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText(/New Invoice/i));
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+
+    // Without a batch selected, non-SPONSOR customers (e.g. CORPORATE) are selectable
+    const customerSelect = screen.getByRole('combobox', { name: /Customer \/ Sponsor/i });
+    fireEvent.change(customerSelect, { target: { value: 'cust-corp' } });
+    expect(customerSelect).toHaveValue('cust-corp');
+
+    // Searchable course fee combobox exposes all active fees regardless of batch or funding type
+    const courseFeeCombobox = screen.getByRole('combobox', { name: /Search course fee by name or code/i });
+    fireEvent.focus(courseFeeCombobox);
+    expect(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /BREAD AND PASTRY NCII ASSESSMENT FEE - BPP-002/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('option', { name: /FORKLIFT NC2 TUITION FEE - FORKLIFT-003/i }));
+    expect(screen.getByText('FORKLIFT-NC2')).toBeInTheDocument();
+
+    // Description auto-populates from course fee AND stays editable when no batch is selected
+    const descInput = screen.getByPlaceholderText('Description');
+    expect(descInput).not.toBeDisabled();
+    expect(descInput).toHaveValue('Tuition');
+    fireEvent.change(descInput, { target: { value: 'Tuition - Corporate Advance Reservation' } });
+
+    // Quantity can be adjusted freely on standalone invoices
+    const qtyInput = screen.getByRole('spinbutton', { name: /Quantity line 1/i });
+    fireEvent.change(qtyInput, { target: { value: '3' } });
+    expect(screen.getByRole('textbox', { name: /Amount line 1/i })).toHaveValue('135,000.00');
+    expect(screen.getByText(/4100 - Tuition Fee Income/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Invoice notes or memo...'), { target: { value: 'Advance corporate training invoice before batch scheduling' } });
+    fireEvent.click(screen.getByTitle('Approve'));
+
+    expect(onAddInvoice).toHaveBeenCalledTimes(1);
+    const savedInvoice = onAddInvoice.mock.calls[0][0] as Invoice;
+    expect(savedInvoice.documentType).toBe('INVOICE');
+    expect(savedInvoice.batchId).toBeUndefined();
+    expect(savedInvoice.sponsorId).toBe('cust-corp');
+    expect(savedInvoice.status).toBe('OPEN');
+    expect(savedInvoice.grandTotal).toBe(135000);
+    expect(savedInvoice.lines[0]).toMatchObject({
+      courseFeeId: 'fee-priv',
+      lineType: 'COURSE_FEE',
+      classificationCode: 'FORKLIFT-NC2',
+      description: 'Tuition - Corporate Advance Reservation',
+      glAccountId: 'acc-tuition',
+      taxCategoryId: 'tc2',
+      quantity: 3,
+      unitPrice: 45000,
+      amount: 135000,
+    });
+  });
+
+  it('detaches batch course fee lines while preserving payer and manual lines when clearing an optional batch', async () => {
+    vi.spyOn(SupabaseDataService.prototype, 'fetchBillingCourseFeeInvoice').mockResolvedValue([] as any);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    render(
+      <InvoicesView
+        {...baseProps}
+        sponsors={[
+          { id: 'spon-1', orgId: 'org1', name: 'OWWA XI', customerType: 'SPONSOR', createdAt: '' }
+        ]}
+        qualifications={[
+          { id: 'qual-1', orgId: 'org1', code: 'HEO-NC2', name: 'Heavy Equipment Operation NC II', durationDays: 10, createdAt: '' }
+        ]}
+        batches={[
+          {
+            id: 'batch-1',
+            orgId: 'org1',
+            batchCode: 'HEO-B1',
+            name: 'Batch 1',
+            year: 2026,
+            qualificationId: 'qual-1',
+            trainerId: 'tr-1',
+            sponsorId: 'spon-1',
+            studentIds: ['st-1'],
+            status: 'ONGOING',
+            startDate: '2026-10-01',
+            endDate: '2026-10-20',
+            createdAt: ''
+          }
+        ]}
+        enrollments={[
+          {
+            id: 'enr-1',
+            orgId: 'org1',
+            studentId: 'st-1',
+            batchId: 'batch-1',
+            qualificationId: 'qual-1',
+            sponsorId: 'spon-1',
+            billingType: 'BILLABLE',
+            billingStatus: 'UNBILLED',
+            enrollmentStatus: 'ACTIVE',
+            registrationDate: '2026-10-01',
+            createdAt: ''
+          }
+        ]}
+        courseFees={[
+          {
+            id: 'fee-1',
+            orgId: 'org1',
+            feeCode: 'HEO-001',
+            qualificationId: 'qual-1',
+            fundingType: 'SPONSORED',
+            feeName: 'HEO Sponsored Tuition',
+            amount: 12000,
+            taxCategoryId: 'tc2',
+            isSubjectToEwt: false,
+            category: 'TUITION',
+            isActive: true,
+            createdAt: ''
+          }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText(/New Invoice/i));
+    const batchSelect = screen.getByRole('combobox', { name: /Select Batch/i });
+    fireEvent.change(batchSelect, { target: { value: 'batch-1' } });
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Tuition')).toBeInTheDocument();
+    });
+
+    // Add a manual line alongside the batch course fee line
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+    const descInputs = screen.getAllByPlaceholderText('Description');
+    fireEvent.change(descInputs[1], { target: { value: 'Custom mobilization fee' } });
+
+    // Clear optional batch selection
+    fireEvent.change(batchSelect, { target: { value: '' } });
+
+    expect(batchSelect).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: /Customer \/ Sponsor/i })).toHaveValue('spon-1');
+    expect(screen.queryByDisplayValue('Tuition')).toBeNull();
+    expect(screen.getByDisplayValue('Custom mobilization fee')).toBeInTheDocument();
+  });
+
+  it('nullifies cleared batch_id on draft updateInvoice without affecting accounting-locked partial updates', async () => {
+    const service = new SupabaseDataService();
+    const guardSpy = vi.spyOn(service as any, 'getInvoiceRawForGuard');
+    const updateSpy = vi.spyOn(service as any, 'updateInSupabase').mockResolvedValue({ id: 'inv-1' });
+    vi.spyOn(service as any, 'deleteByFilter').mockResolvedValue(undefined);
+    vi.spyOn(service, 'createInvoiceLines').mockResolvedValue([]);
+
+    // Draft invoice detaching batchId: undefined -> batch_id: null
+    guardSpy.mockResolvedValueOnce({ id: 'inv-1', status: 'DRAFT', journal_entry_id: null, posted_at: null });
+    await service.updateInvoice('inv-1', {
+      id: 'inv-1',
+      orgId: 'org1',
+      sponsorId: 'spon-1',
+      studentId: undefined,
+      batchId: undefined,
+      status: 'ON_HOLD',
+      lines: []
+    });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      'invoices',
+      'inv-1',
+      expect.objectContaining({
+        sponsor_id: 'spon-1',
+        student_id: null,
+        batch_id: null,
+        status: 'DRAFT'
+      })
+    );
+
+    // Posted/locked partial payment status update must NOT inject disallowed null fields
+    updateSpy.mockClear();
+    guardSpy.mockResolvedValueOnce({ id: 'inv-1', status: 'OPEN', journal_entry_id: 'je-1', posted_at: '2026-10-29T00:00:00Z' });
+    await service.updateInvoice('inv-1', {
+      status: 'CLOSED',
+      amountPaid: 1000,
+      balanceDue: 0
+    });
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      'invoices',
+      'inv-1',
+      expect.objectContaining({
+        status: 'CLOSED',
+        amount_paid: 1000,
+        balance_due: 0
+      })
+    );
+    const lockedPayload = updateSpy.mock.calls[0][2] as Record<string, unknown>;
+    expect(lockedPayload).not.toHaveProperty('batch_id');
+  });
+
+  it('displays creator names instead of raw user IDs in the Created By column across id, authUid, currentUser, and RPC map', async () => {
+    const pageRows: Invoice[] = [
+      {
+        id: 'inv-u1',
+        orgId: 'org1',
+        invoiceNo: 'INV-2026-0001',
+        invoiceDate: '2026-10-20',
+        dueDate: '2026-11-19',
+        status: 'OPEN',
+        vatPricing: 'EXEMPT',
+        vatRate: 0,
+        subtotal: 1500,
+        vatAmount: 0,
+        grandTotal: 1500,
+        totalEwtAmount: 0,
+        netAmountDue: 1500,
+        amountPaid: 0,
+        balanceDue: 1500,
+        lines: [],
+        createdBy: '11111111-1111-4111-8111-111111111111',
+        createdAt: '2026-10-20T08:00:00Z'
+      },
+      {
+        id: 'inv-auth',
+        orgId: 'org1',
+        invoiceNo: 'INV-2026-0002',
+        invoiceDate: '2026-10-21',
+        dueDate: '2026-11-20',
+        status: 'OPEN',
+        vatPricing: 'EXEMPT',
+        vatRate: 0,
+        subtotal: 2500,
+        vatAmount: 0,
+        grandTotal: 2500,
+        totalEwtAmount: 0,
+        netAmountDue: 2500,
+        amountPaid: 0,
+        balanceDue: 2500,
+        lines: [],
+        createdBy: '22222222-2222-4222-8222-222222222222',
+        createdAt: '2026-10-21T08:00:00Z'
+      },
+      {
+        id: 'inv-sysadmin',
+        orgId: 'org1',
+        invoiceNo: 'INV-2026-0003',
+        invoiceDate: '2026-10-22',
+        dueDate: '2026-11-21',
+        status: 'OPEN',
+        vatPricing: 'EXEMPT',
+        vatRate: 0,
+        subtotal: 3500,
+        vatAmount: 0,
+        grandTotal: 3500,
+        totalEwtAmount: 0,
+        netAmountDue: 3500,
+        amountPaid: 0,
+        balanceDue: 3500,
+        lines: [],
+        createdBy: '33333333-3333-4333-8333-333333333333',
+        createdAt: '2026-10-22T08:00:00Z'
+      },
+      {
+        id: 'inv-rpc',
+        orgId: 'org1',
+        invoiceNo: 'INV-2026-0004',
+        invoiceDate: '2026-10-23',
+        dueDate: '2026-11-22',
+        status: 'OPEN',
+        vatPricing: 'EXEMPT',
+        vatRate: 0,
+        subtotal: 4500,
+        vatAmount: 0,
+        grandTotal: 4500,
+        totalEwtAmount: 0,
+        balanceDue: 4500,
+        netAmountDue: 4500,
+        amountPaid: 0,
+        lines: [],
+        createdBy: '44444444-4444-4444-8444-444444444444',
+        createdAt: '2026-10-23T08:00:00Z'
+      }
+    ];
+
+    vi.spyOn(SupabaseDataService.prototype, 'fetchPage').mockResolvedValue({
+      rows: pageRows,
+      total: pageRows.length,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1
+    });
+    vi.spyOn(SupabaseDataService.prototype, 'getInvoiceCreatorNames').mockResolvedValue({
+      '44444444-4444-4444-8444-444444444444': 'Platform Support Admin'
+    });
+
+    render(
+      <InvoicesView
+        {...baseProps}
+        invoices={pageRows}
+        users={[
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            orgId: 'org1',
+            name: 'Maria',
+            lastName: 'Santos',
+            email: 'maria@org1.edu',
+            role: 'AR_SPECIALIST',
+            createdAt: ''
+          },
+          {
+            id: 'user-row-2',
+            authUid: '22222222-2222-4222-8222-222222222222',
+            orgId: 'org1',
+            name: 'Juan Dela Cruz',
+            lastName: 'Dela Cruz',
+            email: 'juan@org1.edu',
+            role: 'ACCOUNTANT',
+            createdAt: ''
+          } as any
+        ]}
+        currentUser={{
+          id: '33333333-3333-4333-8333-333333333333',
+          orgId: 'platform-org',
+          name: 'Angela',
+          lastName: 'Reyes',
+          email: 'angela@platform.com',
+          role: 'SYSTEM_ADMIN',
+          createdAt: ''
+        }}
+      />
+    );
+
+    expect(await screen.findByText('Maria Santos')).toBeInTheDocument();
+    expect(screen.getByText('Juan Dela Cruz')).toBeInTheDocument();
+    expect(screen.getByText('Angela Reyes')).toBeInTheDocument();
+    expect(await screen.findByText('Platform Support Admin')).toBeInTheDocument();
+
+    expect(screen.queryByText('11111111-1111-4111-8111-111111111111')).toBeNull();
+    expect(screen.queryByText('22222222-2222-4222-8222-222222222222')).toBeNull();
+    expect(screen.queryByText('33333333-3333-4333-8333-333333333333')).toBeNull();
+    expect(screen.queryByText('44444444-4444-4444-8444-444444444444')).toBeNull();
+
+    // Sorting by Created By uses resolved names cleanly without throwing
+    fireEvent.click(screen.getByText('Created By'));
+    const bodyRows = screen.getAllByRole('row').slice(1);
+    expect(bodyRows[0]).toHaveTextContent('Angela Reyes');
   });
 
 });

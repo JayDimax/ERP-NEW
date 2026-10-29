@@ -240,6 +240,7 @@ export interface IDataService {
   getInvoicesByOrg(orgId: string): Promise<Invoice[]>;
   getInvoiceById(id: string): Promise<Invoice | null>;
   voidInvoice(id: string, voidedBy: string, reason: string): Promise<void>;
+  getInvoiceCreatorNames?(orgId: string): Promise<Record<string, string>>;
 
   // Tax Category CRUD
   fetchTaxCategories(orgId: string): Promise<TaxCategoryEntry[]>;

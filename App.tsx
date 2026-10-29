@@ -2958,6 +2958,48 @@ export default function App() {
     }
   };
 
+  const handleUpdateUser = async (id: string, updates: Partial<User>) => {
+    const existing = users.find(u => u.id === id);
+    if (!existing) {
+      handleNotify('error', 'User not found.');
+      return;
+    }
+    const actorIsSysAdmin = currentUser?.role === 'SYSTEM_ADMIN';
+    const actorIsAdmin = currentUser?.role === 'ADMIN';
+    const adminOrgId = currentUser?.orgId || currentOrgId;
+    if (!actorIsSysAdmin && !(actorIsAdmin && existing.orgId === adminOrgId && existing.role !== 'SYSTEM_ADMIN')) {
+      handleNotify('error', 'You do not have permission to edit this user.');
+      return;
+    }
+    if (!actorIsSysAdmin && updates.role === 'SYSTEM_ADMIN') {
+      handleNotify('error', 'Only System Administrators can assign the SYSTEM_ADMIN role.');
+      return;
+    }
+
+    const payload: Partial<User> = {
+      ...updates,
+      orgId: actorIsSysAdmin ? (updates.orgId || existing.orgId) : existing.orgId,
+      studentId: updates.role && updates.role !== 'STUDENT' ? undefined : updates.studentId,
+      trainerId: updates.role && updates.role !== 'TRAINER' ? undefined : updates.trainerId,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      const updated = await dataService.updateUser(id, payload);
+      const merged: User = { ...existing, ...payload, ...updated };
+      setUsers(prev => prev.map(u => u.id === id ? merged : u));
+      if (currentUser?.id === id) {
+        setCurrentUser(merged);
+        authService.updateStoredUser(merged);
+      }
+      AuditService.update(currentOrgId, currentUser?.id || 'system', currentUser?.name || 'System', 'USER', id, merged.name, existing, merged);
+      handleNotify('success', `User "${merged.name}" updated successfully`);
+    } catch (error) {
+      console.error('[App] Error updating user:', error);
+      handleNotify('error', `Failed to update user: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
   const handleDeleteUser = async (id: string) => {
     try {
       console.info('[App] Deleting user:', id);
@@ -3065,7 +3107,7 @@ export default function App() {
   // STUDENT CRUD HANDLERS WITH SUPABASE PERSISTENCE & REFERENTIAL INTEGRITY
   // ============================================================================
 
-  const handleAddStudent = async (student: Student) => {
+  const handleAddStudent = async (student: Student): Promise<Student> => {
     try {
       console.info('[App] Creating student:', student.uli);
       const studentWithOrg = { ...student, orgId: currentOrgId };
@@ -3076,12 +3118,14 @@ export default function App() {
       AuditService.create(currentOrgId, currentUser?.id || 'system', currentUser?.name || 'System', 'STUDENT', savedStudent.id, `${student.firstName} ${student.lastName} `);
 
       handleNotify('success', `Student "${student.firstName} ${student.lastName}" registered successfully`);
+      return savedStudent;
     } catch (error) {
       console.error('[App] Error creating student:', error);
       handleNotify('error', 'Failed to create student. Falling back to memory storage.');
       const studentWithOrg = { ...student, orgId: currentOrgId };
       setStudents(prev => [...prev, studentWithOrg]);
       AuditService.create(currentOrgId, currentUser?.id || 'system', currentUser?.name || 'System', 'STUDENT', student.id, `${student.firstName} ${student.lastName} `);
+      return studentWithOrg;
     }
   };
 
@@ -5253,6 +5297,12 @@ export default function App() {
         }
       }
 
+      const resolvedLineClassificationCode = String(line.classificationCode || '').trim() || (
+        line.courseFeeId
+          ? qualifications.find(q => q.id === courseFees.find(f => f.id === line.courseFeeId)?.qualificationId)?.code
+          : undefined
+      );
+
       if (revenueAccountId && netRevenue > 0) {
         jLines.push({
           id: `${jeId}-rev-${idx}`,
@@ -5265,7 +5315,7 @@ export default function App() {
           memo: line.description || `Revenue: ${glRef} Line ${idx + 1}`,
           contactId: invoice.sponsorId || invoice.studentId || undefined,
           contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : undefined,
-          classificationCode: line.classificationCode,
+          classificationCode: resolvedLineClassificationCode,
         } as JournalLine);
       } else if (revenueAccountId && netRevenue < 0) {
         jLines.push({
@@ -5279,7 +5329,7 @@ export default function App() {
           memo: line.description || `Discount/Adjustment: ${glRef} Line ${idx + 1}`,
           contactId: invoice.sponsorId || invoice.studentId || undefined,
           contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : undefined,
-          classificationCode: line.classificationCode,
+          classificationCode: resolvedLineClassificationCode,
         } as JournalLine);
       }
     });
@@ -7064,12 +7114,20 @@ export default function App() {
               <NavItem icon={<Landmark size={18} />} label="Cash Management" active={activeTab === 'banking'} onClick={() => navigateTo('banking')} compact={!sidebarOpen} brandColor={brandColor} />
               <NavItem icon={<Printer size={18} />} label="Check Printing" active={activeTab === 'checks'} onClick={() => navigateTo('checks')} compact={!sidebarOpen} brandColor={brandColor} />
               {userCanAccess('ar') && <NavItem icon={<Receipt size={18} />} label="Accounts Receivable" active={activeTab === 'ar'} onClick={() => navigateTo('ar')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('ar-calendar-tasks') && <NavItem icon={<ListTodo size={18} />} label="AR Calendar & Tasks" active={activeTab === 'ar-calendar-tasks'} onClick={() => navigateTo('ar-calendar-tasks')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('revenue-recognition') && <NavItem icon={<TrendingUp size={18} />} label="Revenue Recognition" active={activeTab === 'revenue-recognition'} onClick={() => navigateTo('revenue-recognition')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('customers') && <NavItem icon={<Users size={18} />} label="Learners & Customers" active={activeTab === 'customers'} onClick={() => navigateTo('customers')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('invoices') && <NavItem icon={<FileText size={18} />} label="Invoices" active={activeTab === 'invoices'} onClick={() => navigateTo('invoices')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('non-invoice-payments') && <NavItem icon={<Banknote size={18} />} label="Non-Invoice Payments" active={activeTab === 'non-invoice-payments'} onClick={() => navigateTo('non-invoice-payments')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('payments') && <NavItem icon={<Wallet size={18} />} label="Payments and Applications" active={activeTab === 'payments'} onClick={() => navigateTo('payments')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('bank-deposits') && <NavItem icon={<ArrowDownToLine size={18} />} label="Bank Deposits" active={activeTab === 'bank-deposits'} onClick={() => navigateTo('bank-deposits')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('write-off') && <NavItem icon={<Zap size={18} />} label="AR Write Offs" active={activeTab === 'write-off'} onClick={() => navigateTo('write-off')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('credit-debit-memo') && <NavItem icon={<CreditCard size={18} />} label="AR Credit/Debit Memo" active={activeTab === 'credit-debit-memo'} onClick={() => navigateTo('credit-debit-memo')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('reclassify') && <NavItem icon={<RefreshCw size={18} />} label="AR Reclassify" active={activeTab === 'reclassify'} onClick={() => navigateTo('reclassify')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('collection-receipt') && <NavItem icon={<Receipt size={18} />} label="Collection Receipt" active={activeTab === 'collection-receipt'} onClick={() => navigateTo('collection-receipt')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('collection-report') && <NavItem icon={<BarChart2 size={18} />} label="Collection Report" active={activeTab === 'collection-report'} onClick={() => navigateTo('collection-report')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('aging-report') && <NavItem icon={<PieChart size={18} />} label="AR Aging Report" active={activeTab === 'aging-report'} onClick={() => navigateTo('aging-report')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('soa') && <NavItem icon={<FileText size={18} />} label="Statement (SOA)" active={activeTab === 'soa'} onClick={() => navigateTo('soa')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('course-fees') && <NavItem icon={<Receipt size={18} />} label="Course Fees" active={activeTab === 'course-fees'} onClick={() => navigateTo('course-fees')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('enrollments') && <NavItem icon={<UserCheck size={18} />} label="Enrollments" active={activeTab === 'enrollments'} onClick={() => navigateTo('enrollments')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('payroll') && <NavItem icon={<Briefcase size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => navigateTo('payroll')} compact={!sidebarOpen} brandColor={brandColor} />}
@@ -7102,6 +7160,7 @@ export default function App() {
               {userCanAccess('ledger') && <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'journal-vouchers'} onClick={() => navigateTo('journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('ap-journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="AP Journal Vouchers" active={activeTab === 'ap-journal-vouchers'} onClick={() => navigateTo('ap-journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
+              {userCanAccess('customer-ledger') && <NavItem icon={<BookText size={18} />} label="Customer Ledger" active={activeTab === 'customer-ledger'} onClick={() => navigateTo('customer-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
               {userCanAccess('vendor-ledger') && <NavItem icon={<BookOpen size={18} />} label="Vendor Ledger" active={activeTab === 'vendor-ledger'} onClick={() => navigateTo('vendor-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
             </NavSection>
           )}
@@ -7574,7 +7633,7 @@ export default function App() {
           {activeTab === 'students' && userCanAccess('students') && <StudentsView orgId={currentOrgId} students={students.filter(s => s.orgId === currentOrgId)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} onBatchAddStudents={handleBatchAddStudents} canCreateStudent={canPerformAction(currentUser?.role, 'students', 'create')} canEditStudent={canPerformAction(currentUser?.role, 'students', 'edit')} />}
           {activeTab === 'trainers' && <TrainersView organization={currentOrg} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} onAddTrainer={handleAddTrainer} onUpdateTrainer={handleUpdateTrainer} onDeleteTrainer={handleDeleteTrainer} />}
           {activeTab === 'qualifications' && <QualificationsView organization={currentOrg} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} onAddQualification={handleAddQualification} onUpdateQualification={handleUpdateQualification} onDeleteQualification={handleDeleteQualification} />}
-          {activeTab === 'course-fees' && <CourseFeesView courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} accounts={filteredAccounts} currency={currentOrg?.currency || 'PHP'} onAddCourseFee={handleAddCourseFee} onUpdateCourseFee={handleUpdateCourseFee} onDeleteCourseFee={handleDeleteCourseFee} />}
+          {activeTab === 'course-fees' && <CourseFeesView courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} accounts={filteredAccounts} currency={currentOrg?.currency || 'PHP'} onAddCourseFee={handleAddCourseFee} onUpdateCourseFee={handleUpdateCourseFee} onDeleteCourseFee={handleDeleteCourseFee} onNotify={handleNotify} />}
           {activeTab === 'batches' && <BatchesView organization={currentOrg} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} onAddBatch={handleAddBatch} onUpdateBatch={handleUpdateBatch} onDeleteBatch={handleDeleteBatch} onNotify={handleNotify} />}
           {activeTab === 'transcripts' && <TranscriptRecordsView orgId={currentOrgId} currentUserId={currentUser?.id} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onNotify={handleNotify} />}
           {activeTab === 'alumni-reports' && (
@@ -7606,7 +7665,8 @@ export default function App() {
             payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
             sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
             students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+            users={users}
+            currentUser={currentUser}
             enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
             assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
             batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
@@ -7628,6 +7688,7 @@ export default function App() {
             organization={currentOrg}
             orgId={currentOrgId}
             taxCategories={taxCategories}
+            onAddStudent={handleAddStudent}
           />}
           {activeTab === 'non-invoice-payments' && <InvoicesView
             documentMode="NON_INVOICE_PAYMENT"
@@ -7635,7 +7696,8 @@ export default function App() {
             payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
             sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
             students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+            users={users}
+            currentUser={currentUser}
             enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
             assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
             batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
@@ -7656,6 +7718,7 @@ export default function App() {
             organization={currentOrg}
             orgId={currentOrgId}
             taxCategories={taxCategories}
+            onAddStudent={handleAddStudent}
           />}
           {activeTab === 'payments' && <PaymentsView
             currentOrgId={currentOrgId}
@@ -7776,6 +7839,7 @@ export default function App() {
             trainers={trainers.filter(t => t.orgId === currentOrgId)}
             organization={currentOrg}
             onAddUser={handleAddUser}
+            onUpdateUser={handleUpdateUser}
             onDeleteUser={handleDeleteUser}
           />}
           {activeTab === 'audit' && canViewAuditTrail && <AuditTrail orgId={currentOrgId} logs={auditLogs} brandColor={brandColor} />}

@@ -29,6 +29,8 @@ function json(status: number, data: any) {
 function expenseValues(input: any) {
   const quantity = Number(input.quantity);
   const unitCost = Number(input.unitCost ?? input.unit_cost);
+  const qualificationId = String(input.qualificationId ?? input.qualification_id ?? "").trim();
+  const taxCategoryId = String(input.taxCategoryId ?? input.tax_category_id ?? "").trim();
   return {
     rfq_code: String(input.rfqCode ?? input.rfq_code ?? "").trim(),
     transaction_date: String(input.transactionDate ?? input.transaction_date ?? ""),
@@ -36,9 +38,9 @@ function expenseValues(input: any) {
     quantity,
     unit_cost: unitCost,
     amount: Math.round(quantity * unitCost * 100) / 100,
-    expense_account_id: String(input.expenseAccountId ?? input.expense_account_id ?? ""),
-    qualification_id: String(input.qualificationId ?? input.qualification_id ?? ""),
-    tax_category_id: String(input.taxCategoryId ?? input.tax_category_id ?? ""),
+    expense_account_id: String(input.expenseAccountId ?? input.expense_account_id ?? "").trim(),
+    qualification_id: qualificationId || null,
+    tax_category_id: taxCategoryId || null,
     supplier_name: String(input.supplierName ?? input.supplier_name ?? "").trim(),
     claimed_by: String(input.claimedBy ?? input.claimed_by ?? "").trim(),
     employee_id: String(input.employeeId ?? input.employee_id ?? "").trim(),
@@ -73,22 +75,34 @@ Deno.serve(async (request) => {
 
   if (body.action === "create") {
     const values = expenseValues(body.expense || {});
-    if (!values.rfq_code || !values.transaction_date || !values.description || !values.supplier_name || !values.claimed_by || !values.employee_id || !values.expense_account_id || !values.qualification_id || !values.tax_category_id) {
-      return json(400, { error: "RFQ code, date, description, supplier, claimed by, expense account, class, and tax category are required" });
+    if (!values.rfq_code || !values.transaction_date || !values.description || !values.supplier_name || !values.claimed_by || !values.employee_id || !values.expense_account_id) {
+      return json(400, { error: "RFQ code, date, description, supplier, claimed by, and expense account are required" });
     }
     if (!(values.quantity > 0) || !(values.unit_cost > 0)) {
       return json(400, { error: "Quantity and unit cost must be greater than zero" });
     }
     const { data: expenseAccount } = await admin.from("chart_of_accounts")
       .select("id").eq("id", values.expense_account_id).eq("org_id", orgId)
-      .in("class", ["EXPENSE", "ASSET"]).eq("is_header", false).maybeSingle();
-    if (!expenseAccount) return json(403, { error: "Expense or asset account is outside this organization or is not a posting account" });
-    const { data: qualification } = await admin.from("qualifications").select("id")
-      .eq("id", values.qualification_id).eq("org_id", orgId).maybeSingle();
-    if (!qualification) return json(403, { error: "Class is outside this organization or inactive" });
-    const { data: taxCategory } = await admin.from("tax_categories").select("id")
-      .eq("id", values.tax_category_id).eq("org_id", orgId).maybeSingle();
-    if (!taxCategory) return json(403, { error: "Tax category is outside this organization" });
+      .eq("is_header", false).maybeSingle();
+    if (!expenseAccount) return json(403, { error: "Selected account is outside this organization or is not a posting account" });
+    if (values.qualification_id) {
+      const { data: qualification } = await admin.from("qualifications").select("id")
+        .eq("id", values.qualification_id).eq("org_id", orgId).maybeSingle();
+      if (!qualification) return json(403, { error: "Class is outside this organization or inactive" });
+    } else {
+      const { data: orgQualification } = await admin.from("qualifications").select("id")
+        .eq("org_id", orgId).limit(1).maybeSingle();
+      if (orgQualification) return json(400, { error: "Class is required" });
+    }
+    if (values.tax_category_id) {
+      const { data: taxCategory } = await admin.from("tax_categories").select("id")
+        .eq("id", values.tax_category_id).eq("org_id", orgId).maybeSingle();
+      if (!taxCategory) return json(403, { error: "Tax category is outside this organization" });
+    } else {
+      const { data: orgTaxCategory } = await admin.from("tax_categories").select("id")
+        .eq("org_id", orgId).limit(1).maybeSingle();
+      if (orgTaxCategory) return json(400, { error: "Tax category is required" });
+    }
     const { data: employee } = await admin.from("users").select("id")
       .eq("id", values.employee_id).eq("org_id", orgId).neq("role", "SYSTEM_ADMIN")
       .eq("is_active", true).maybeSingle();
@@ -100,7 +114,12 @@ Deno.serve(async (request) => {
       status: "open",
       created_by: actor.id,
     }).select("*").single();
-    if (error) return json(400, { error: error.message, code: error.code });
+    if (error) {
+      const message = error.code === "23505"
+        ? "An expense record with this RFQ / F.R. code already exists in this organization."
+        : error.message;
+      return json(400, { error: message, code: error.code });
+    }
     return json(200, { expense: data });
   }
 
@@ -118,22 +137,34 @@ Deno.serve(async (request) => {
       };
     } else {
       const values = expenseValues(body.updates || {});
-      if (!values.rfq_code || !values.transaction_date || !values.description || !values.supplier_name || !values.claimed_by || !values.employee_id || !values.expense_account_id || !values.qualification_id || !values.tax_category_id) {
-        return json(400, { error: "RFQ code, date, description, supplier, claimed by, expense account, class, and tax category are required" });
+      if (!values.rfq_code || !values.transaction_date || !values.description || !values.supplier_name || !values.claimed_by || !values.employee_id || !values.expense_account_id) {
+        return json(400, { error: "RFQ code, date, description, supplier, claimed by, and expense account are required" });
       }
       if (!(values.quantity > 0) || !(values.unit_cost > 0)) {
         return json(400, { error: "Quantity and unit cost must be greater than zero" });
       }
       const { data: expenseAccount } = await admin.from("chart_of_accounts")
         .select("id").eq("id", values.expense_account_id).eq("org_id", orgId)
-        .in("class", ["EXPENSE", "ASSET"]).eq("is_header", false).maybeSingle();
-      if (!expenseAccount) return json(403, { error: "Expense or asset account is outside this organization or is not a posting account" });
-      const { data: qualification } = await admin.from("qualifications").select("id")
-        .eq("id", values.qualification_id).eq("org_id", orgId).maybeSingle();
-      if (!qualification) return json(403, { error: "Class is outside this organization or inactive" });
-      const { data: taxCategory } = await admin.from("tax_categories").select("id")
-        .eq("id", values.tax_category_id).eq("org_id", orgId).maybeSingle();
-      if (!taxCategory) return json(403, { error: "Tax category is outside this organization" });
+        .eq("is_header", false).maybeSingle();
+      if (!expenseAccount) return json(403, { error: "Selected account is outside this organization or is not a posting account" });
+      if (values.qualification_id) {
+        const { data: qualification } = await admin.from("qualifications").select("id")
+          .eq("id", values.qualification_id).eq("org_id", orgId).maybeSingle();
+        if (!qualification) return json(403, { error: "Class is outside this organization or inactive" });
+      } else {
+        const { data: orgQualification } = await admin.from("qualifications").select("id")
+          .eq("org_id", orgId).limit(1).maybeSingle();
+        if (orgQualification) return json(400, { error: "Class is required" });
+      }
+      if (values.tax_category_id) {
+        const { data: taxCategory } = await admin.from("tax_categories").select("id")
+          .eq("id", values.tax_category_id).eq("org_id", orgId).maybeSingle();
+        if (!taxCategory) return json(403, { error: "Tax category is outside this organization" });
+      } else {
+        const { data: orgTaxCategory } = await admin.from("tax_categories").select("id")
+          .eq("org_id", orgId).limit(1).maybeSingle();
+        if (orgTaxCategory) return json(400, { error: "Tax category is required" });
+      }
       const { data: employee } = await admin.from("users").select("id")
         .eq("id", values.employee_id).eq("org_id", orgId).neq("role", "SYSTEM_ADMIN")
         .eq("is_active", true).maybeSingle();
@@ -142,7 +173,12 @@ Deno.serve(async (request) => {
     }
     const { data, error } = await admin.from("time_expenses").update(allowed)
       .eq("id", id).eq("org_id", orgId).eq("status", "open").select("*").single();
-    if (error) return json(400, { error: error.message, code: error.code });
+    if (error) {
+      const message = error.code === "23505"
+        ? "An expense record with this RFQ / F.R. code already exists in this organization."
+        : error.message;
+      return json(400, { error: message, code: error.code });
+    }
     return json(200, { expense: data });
   }
 

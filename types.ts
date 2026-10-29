@@ -202,6 +202,8 @@ export interface StudentDocument {
   remarks?: string;
 }
 
+export type StudentRegistrationStatus = 'REGISTERED' | 'PROVISIONAL';
+
 export interface Student extends BaseEntity {
   id: string;
   orgId: string;
@@ -240,8 +242,16 @@ export interface Student extends BaseEntity {
   sponsorId?: string;
   profilePhoto?: string;
   documents?: StudentDocument[];            // Array of document metadata + fileData
+  registrationStatus?: StudentRegistrationStatus;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export function isProvisionalStudent(student: Student | null | undefined): boolean {
+  if (!student) return false;
+  if (student.registrationStatus === 'PROVISIONAL') return true;
+  if (student.documents?.some(d => d.name === 'Provisional AR Registration' || d.id?.startsWith('doc-provisional'))) return true;
+  return false;
 }
 
 export interface Trainer extends BaseEntity {

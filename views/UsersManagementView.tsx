@@ -7,7 +7,7 @@ import ModalPortal from '../components/ModalPortal';
 import { 
   UserCog, Search, Plus, Trash2, X, Shield, Users, 
   Key, Mail, Eye, EyeOff, ShieldCheck, UserCircle,
-  ChevronRight, Lock, GraduationCap, Award, AlertCircle, Filter
+  Pencil, Lock, GraduationCap, Award, AlertCircle, Filter
 } from 'lucide-react';
 
 interface UsersManagementViewProps {
@@ -16,16 +16,22 @@ interface UsersManagementViewProps {
   trainers?: Trainer[];
   organization?: Organization;
   onAddUser: (user: User) => void;
+  onUpdateUser?: (id: string, updates: Partial<User>) => void;
   onDeleteUser: (id: string) => void;
 }
 
 const ROLES = [
-  { id: 'ADMIN', label: 'Administrator', desc: 'Full access to Financials & Operations', icon: ShieldCheck },
-  { id: 'ACCOUNTANT', label: 'Accountant', desc: 'Financial reporting & General Ledger only', icon: Users },
-  { id: 'REGISTRAR', label: 'Registrar', desc: 'Student, Trainer & Batch Management only', icon: Users },
+  { id: 'ADMIN', label: 'Administrator', desc: 'Full access to all organization modules', icon: ShieldCheck },
+  { id: 'PRESIDENT', label: 'President / Executive', desc: 'Executive dashboards, reports & approvals', icon: Shield },
   { id: 'FINANCE_MANAGER', label: 'Finance Manager', desc: 'Full financial access with approval rights', icon: Shield },
-  { id: 'AP_SPECIALIST', label: 'AP Specialist', desc: 'Accounts Payable & Vendor management', icon: Users },
+  { id: 'ACCOUNTANT', label: 'Accountant', desc: 'Financial reporting & General Ledger', icon: Users },
   { id: 'AR_SPECIALIST', label: 'AR Specialist', desc: 'Accounts Receivable & Collections', icon: Users },
+  { id: 'AP_SUPERVISOR', label: 'AP Supervisor', desc: 'Accounts Payable with approval rights', icon: Shield },
+  { id: 'AP_SPECIALIST', label: 'AP Specialist', desc: 'Accounts Payable & Vendor management', icon: Users },
+  { id: 'AP_CLERK', label: 'AP Clerk', desc: 'Accounts Payable data entry', icon: Users },
+  { id: 'TREASURY', label: 'Treasury', desc: 'Banking & Cash Management', icon: Users },
+  { id: 'AUDITOR', label: 'Auditor', desc: 'Read-only financial & audit access', icon: Eye },
+  { id: 'REGISTRAR', label: 'Registrar', desc: 'Student, Trainer & Batch Management', icon: Users },
   { id: 'STUDENT', label: 'Student Portal', desc: 'Student self-service portal access', icon: GraduationCap },
   { id: 'TRAINER', label: 'Trainer Portal', desc: 'Trainer schedule & class management', icon: Award },
 ];
@@ -36,11 +42,13 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   trainers = [],
   organization,
   onAddUser, 
+  onUpdateUser,
   onDeleteUser 
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | string>('ALL');
   const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -59,16 +67,20 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
     }
   }, [brandColor]);
 
-  // Get students/trainers that don't already have user accounts
+  // Get students/trainers that don't already have user accounts (keep current link when editing)
   const availableStudents = useMemo(() => {
-    const linkedStudentIds = new Set(users.filter(u => u.studentId).map(u => u.studentId));
+    const linkedStudentIds = new Set(
+      users.filter(u => u.studentId && u.id !== editingUser?.id).map(u => u.studentId)
+    );
     return students.filter(s => !s.isDeleted && !linkedStudentIds.has(s.id));
-  }, [students, users]);
+  }, [students, users, editingUser]);
 
   const availableTrainers = useMemo(() => {
-    const linkedTrainerIds = new Set(users.filter(u => u.trainerId).map(u => u.trainerId));
+    const linkedTrainerIds = new Set(
+      users.filter(u => u.trainerId && u.id !== editingUser?.id).map(u => u.trainerId)
+    );
     return trainers.filter(t => !t.isDeleted && !linkedTrainerIds.has(t.id));
-  }, [trainers, users]);
+  }, [trainers, users, editingUser]);
 
   const selectedStudent = useMemo(
     () => students.find(s => s.id === formData.studentId),
@@ -89,6 +101,7 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
   });
 
   const resetForm = () => {
+    setEditingUser(null);
     setFormData({
       name: '',
       email: '',
@@ -98,6 +111,20 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       trainerId: '',
     });
     setFormError('');
+  };
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormData({
+      name: user.name || '',
+      email: user.email || '',
+      password: '',
+      role: user.role || 'REGISTRAR',
+      studentId: user.studentId || '',
+      trainerId: user.trainerId || '',
+    });
+    setFormError('');
+    setShowModal(true);
   };
 
   const handleRoleChange = (roleId: string) => {
@@ -144,8 +171,13 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
       return;
     }
 
-    if (!formData.password || formData.password.length < 8) {
+    if (!editingUser && (!formData.password || formData.password.length < 8)) {
       setFormError('Password must be at least 8 characters');
+      return;
+    }
+
+    if (editingUser && formData.password && formData.password.length < 8) {
+      setFormError('New password must be at least 8 characters');
       return;
     }
 
@@ -161,8 +193,22 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
     }
 
     // Check for duplicate email
-    if (users.some(u => u.email.toLowerCase() === formData.email.toLowerCase())) {
+    if (users.some(u => u.id !== editingUser?.id && u.email.toLowerCase() === formData.email.toLowerCase())) {
       setFormError('A user with this email already exists');
+      return;
+    }
+
+    if (editingUser) {
+      onUpdateUser?.(editingUser.id, {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role as any,
+        studentId: formData.role === 'STUDENT' ? formData.studentId : undefined,
+        trainerId: formData.role === 'TRAINER' ? formData.trainerId : undefined,
+        ...(formData.password ? { password: formData.password } : {}),
+      });
+      setShowModal(false);
+      resetForm();
       return;
     }
 
@@ -221,7 +267,7 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
           <p className="text-sm text-gray-500 font-normal italic">Institutional identity management and role-based access control (RBAC).</p>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={() => { resetForm(); setShowModal(true); }}
           className="flex items-center gap-2 px-6 py-2.5 bg-brand text-white rounded hover:bg-brand-hover transition-all shadow-md shadow-brand/20 font-bold text-sm active:scale-95"
         >
           <Plus size={18} /> Onboard New User
@@ -317,15 +363,23 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                 </td>
                 <td className="px-8 py-6 text-right">
                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {onUpdateUser && user.role !== 'SYSTEM_ADMIN' && (
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(user)}
+                        className="p-2 hover:bg-gray-100 text-gray-400 hover:text-brand rounded transition-all"
+                        title="Edit User"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                    )}
                     <button 
+                      type="button"
                       onClick={() => onDeleteUser(user.id)}
                       className="p-2 hover:bg-rose-50 text-gray-300 hover:text-rose-600 rounded transition-all"
                       title="Revoke Access"
                     >
                       <Trash2 size={18} />
-                    </button>
-                    <button className="p-2 hover:bg-gray-100 text-gray-300 hover:text-brand rounded transition-all">
-                      <ChevronRight size={18} />
                     </button>
                   </div>
                 </td>
@@ -355,9 +409,9 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
             <div className="p-8 border-b flex justify-between items-center bg-gray-50">
               <div className="flex items-center gap-4">
                 <div className="p-3 bg-brand text-white rounded shadow-sm shadow-brand/20">
-                  <Plus size={24} />
+                  {editingUser ? <UserCog size={24} /> : <Plus size={24} />}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 uppercase tracking-tight">Onboard User</h3>
+                <h3 className="text-lg font-semibold text-gray-800 uppercase tracking-tight">{editingUser ? 'Edit User' : 'Onboard User'}</h3>
               </div>
               <button onClick={() => { setShowModal(false); resetForm(); }} className="text-gray-400 hover:text-gray-600">
                 <X size={28} />
@@ -497,12 +551,14 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">Initial Password * (min 8 characters)</label>
+                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-1">
+                    {editingUser ? 'New Password (optional, min 8 characters)' : 'Initial Password * (min 8 characters)'}
+                  </label>
                   <div className="relative">
                     <input 
-                      required 
+                      required={!editingUser} 
                       type="password" 
-                      placeholder="••••••••" 
+                      placeholder={editingUser ? 'Leave blank to keep current password' : '••••••••'} 
                       minLength={8}
                       className="w-full px-5 py-4 bg-gray-50 border border-gray-200 rounded focus:border-brand outline-none font-bold text-gray-800"
                       value={formData.password} 
@@ -511,7 +567,7 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
                     <Key className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-300" size={20} />
                   </div>
                   <p className="text-xs text-gray-400 px-1">
-                    The user should change this password after first login.
+                    {editingUser ? 'Only fill this if resetting the local credential hash.' : 'The user should change this password after first login.'}
                   </p>
                 </div>
               </div>
@@ -529,7 +585,7 @@ const UsersManagementView: React.FC<UsersManagementViewProps> = ({
 
               <div className="pt-4 flex gap-4">
                 <button type="button" onClick={() => { setShowModal(false); resetForm(); }} className="flex-1 py-4 text-sm font-semibold text-gray-500 hover:bg-gray-50 rounded transition-all">Discard</button>
-                <button type="submit" className="flex-1 py-4 bg-brand text-white rounded text-sm font-semibold shadow-md shadow-brand/20 hover:bg-brand-hover active:scale-95 transition-all">Onboard to System</button>
+                <button type="submit" className="flex-1 py-4 bg-brand text-white rounded text-sm font-semibold shadow-md shadow-brand/20 hover:bg-brand-hover active:scale-95 transition-all">{editingUser ? 'Save Changes' : 'Onboard to System'}</button>
               </div>
             </form>
           </div>
