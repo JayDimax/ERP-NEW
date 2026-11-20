@@ -5071,7 +5071,7 @@ export default function App() {
       !!String(invoice.glEntryNumber || '').trim()
     );
 
-  const handleAddInvoice = async (invoice: Invoice) => {
+  const handleAddInvoice = async (invoice: Invoice): Promise<boolean> => {
     try {
       console.info('[App] Creating invoice:', invoice.invoiceNo);
       const creatorId = invoice.createdBy || currentUser?.id || 'system';
@@ -5085,7 +5085,7 @@ export default function App() {
       const requiredFieldIssues = validateInvoiceRequiredFields(invoice);
       if (requiredFieldIssues.length > 0) {
         handleNotify('error', buildInvoiceRequiredFieldMessage(requiredFieldIssues));
-        return;
+        return false;
       }
 
       // ── Accounting Posting: trigger if status is OPEN ──────────
@@ -5142,9 +5142,11 @@ export default function App() {
 
       AuditService.create(currentOrgId, currentUser?.id || 'system', currentUser?.name || 'System', 'INVOICE', normalizedSavedInvoice.id, invoice.invoiceNo);
       handleNotify('success', `Invoice ${invoice.invoiceNo} created successfully`);
+      return true;
     } catch (error) {
       console.error('[App] Error creating invoice:', error);
       handleNotify('error', 'Failed to create invoice.');
+      return false;
     }
   };
 
@@ -5372,13 +5374,13 @@ export default function App() {
     };
   };
 
-  const handleUpdateInvoice = async (invoice: Invoice) => {
+  const handleUpdateInvoice = async (invoice: Invoice): Promise<boolean> => {
     try {
       console.info('[App] Updating invoice:', invoice.id);
       const existing = invoices.find(i => i.id === invoice.id);
       if (isInvoiceAlreadyPosted(existing)) {
         handleNotify('error', 'This invoice is already posted and can no longer be updated.');
-        return;
+        return false;
       }
       const existingJournalEntryId = invoice.journalEntryId || existing?.journalEntryId;
       const existingGlEntryNumber = invoice.glEntryNumber || existing?.glEntryNumber;
@@ -5391,7 +5393,7 @@ export default function App() {
       const requiredFieldIssues = validateInvoiceRequiredFields(invoice);
       if (requiredFieldIssues.length > 0) {
         handleNotify('error', buildInvoiceRequiredFieldMessage(requiredFieldIssues));
-        return;
+        return false;
       }
 
       const transactionDescription = String(invoice.notes || '').trim();
@@ -5557,9 +5559,11 @@ export default function App() {
       if (invoice.status !== 'OPEN' || existing?.status === 'OPEN') {
         handleNotify('success', `Invoice ${invoice.invoiceNo} updated successfully`);
       }
+      return true;
     } catch (error) {
       console.error('[App] Error updating invoice:', error);
       handleNotify('error', 'Failed to update invoice.');
+      return false;
     }
   };
 

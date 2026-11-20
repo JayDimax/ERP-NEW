@@ -836,4 +836,64 @@ describe('InvoicesView tax category dropdown', () => {
     expect(bodyRows[0]).toHaveTextContent('Angela Reyes');
   });
 
+  it('awaits async invoice creation before refreshing the table so newly created draft invoices appear immediately', async () => {
+    const persistedRows: Invoice[] = [];
+    const fetchPageSpy = vi.spyOn(SupabaseDataService.prototype, 'fetchPage').mockImplementation(async () => ({
+      rows: [...persistedRows],
+      total: persistedRows.length,
+      page: 1,
+      pageSize: 25,
+      totalPages: persistedRows.length > 0 ? 1 : 0
+    }));
+
+    let resolveSave!: (value: boolean) => void;
+    const onAddInvoice = vi.fn().mockImplementation((inv: Invoice) => new Promise<boolean>((resolve) => {
+      resolveSave = (ok: boolean) => {
+        if (ok) persistedRows.unshift(inv);
+        resolve(ok);
+      };
+    }));
+
+    fetchPageSpy.mockClear();
+
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="INVOICE"
+        onAddInvoice={onAddInvoice}
+        sponsors={[
+          { id: 'cust-1', orgId: 'org1', name: 'Acme Training Corp', customerType: 'CORPORATE', createdAt: '' }
+        ]}
+      />
+    );
+
+    await waitFor(() => expect(fetchPageSpy).toHaveBeenCalled());
+    const initialFetchCount = fetchPageSpy.mock.calls.length;
+
+    fireEvent.click(screen.getByText(/New Invoice/i));
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+
+    fireEvent.change(screen.getByRole('combobox', { name: /Customer \/ Sponsor/i }), { target: { value: 'cust-1' } });
+    const taxCategory = screen.getByRole('combobox', { name: /Tax Category line 1/i });
+    await waitForTaxOption(taxCategory, 'tc1');
+    fireEvent.change(taxCategory, { target: { value: 'tc1' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Unit Price line 1/i }), { target: { value: '500' } });
+    fireEvent.change(screen.getByPlaceholderText('Invoice notes or memo...'), { target: { value: 'Draft invoice dynamic refresh test' } });
+
+    fireEvent.click(screen.getByTitle('Save as Draft'));
+
+    expect(onAddInvoice).toHaveBeenCalledTimes(1);
+    const createdInvoice = onAddInvoice.mock.calls[0][0] as Invoice;
+
+    // Must not refetch before the async insert completes
+    expect(fetchPageSpy).toHaveBeenCalledTimes(initialFetchCount);
+
+    // Complete the async save
+    resolveSave(true);
+
+    // Table refreshes after persistence and displays the newly created draft invoice immediately
+    await waitFor(() => expect(fetchPageSpy).toHaveBeenCalledTimes(initialFetchCount + 1));
+    expect(await screen.findByText(createdInvoice.invoiceNo)).toBeInTheDocument();
+  });
+
 });

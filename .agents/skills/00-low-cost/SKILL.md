@@ -1,3 +1,8 @@
+---
+name: low-cost
+description: Optimize all agent behavior to minimize token usage and avoid unnecessary operations.
+---
+
 # 🧠 Low Cost Execution Skill
 
 ## Purpose

@@ -35,11 +35,11 @@ interface InvoicesViewProps {
   accounts: ChartOfAccount[];
   currency: string;
   isVatRegistered?: boolean;
-  onAddInvoice: (invoice: Invoice) => void;
-  onUpdateInvoice: (invoice: Invoice) => void;
+  onAddInvoice: (invoice: Invoice) => Promise<boolean | void> | boolean | void;
+  onUpdateInvoice: (invoice: Invoice) => Promise<boolean | void> | boolean | void;
   onDeleteInvoice: (id: string) => Promise<boolean>;
-  onPostInvoice?: (invoice: Invoice) => void;
-  onVoidInvoice?: (id: string, reason: string) => void;
+  onPostInvoice?: (invoice: Invoice) => Promise<boolean | void> | boolean | void;
+  onVoidInvoice?: (id: string, reason: string) => Promise<boolean | void> | boolean | void;
   onUpdateEnrollment?: (enrollment: Enrollment) => void; // For updating billing status after invoice generation
   onUpdateAssessmentRegistration?: (registration: AssessmentRegistration) => void;
   journalEntries?: JournalEntry[];
@@ -457,6 +457,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [pageLoadError, setPageLoadError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isSubmittingInvoice, setIsSubmittingInvoice] = useState(false);
   const [creatorNameMap, setCreatorNameMap] = useState<Record<string, string>>({});
 
   // Quick Unregistered Student Billing State
@@ -1730,7 +1731,8 @@ const brandColor = organization?.primaryColor || '#059669';
   };
 
   // Save invoice
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (isSubmittingInvoice) return;
     if (isReadOnly) {
       alert('This invoice is already posted and can no longer be saved as draft.');
       return;
@@ -1794,20 +1796,29 @@ const brandColor = organization?.primaryColor || '#059669';
       updatedAt: new Date().toISOString()
     };
 
-    if (editingInvoice) {
-      onUpdateInvoice(invoice);
-    } else {
-      onAddInvoice(invoice);
-    }
-    setRefreshKey(key => key + 1);
-    markAssessmentRegistrationBilled(invoice);
+    setIsSubmittingInvoice(true);
+    try {
+      const result = editingInvoice
+        ? await onUpdateInvoice(invoice)
+        : await onAddInvoice(invoice);
+      if (result === false) return;
 
-    resetForm();
-    setViewMode('LIST');
+      if (!editingInvoice) {
+        setServerCurrentPage(1);
+      }
+      setRefreshKey(key => key + 1);
+      markAssessmentRegistrationBilled(invoice);
+
+      resetForm();
+      setViewMode('LIST');
+    } finally {
+      setIsSubmittingInvoice(false);
+    }
   };
 
   // Approve invoice
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (isSubmittingInvoice) return;
     if (isReadOnly) {
       alert('This invoice is already posted and can no longer be approved.');
       return;
@@ -1872,20 +1883,28 @@ const brandColor = organization?.primaryColor || '#059669';
       postedAt: new Date().toISOString()
     };
 
-    if (editingInvoice) {
-      onUpdateInvoice(invoice);
-    } else {
-      onAddInvoice(invoice);
-    }
-    setRefreshKey(key => key + 1);
-    markAssessmentRegistrationBilled(invoice);
+    setIsSubmittingInvoice(true);
+    try {
+      const result = editingInvoice
+        ? await onUpdateInvoice(invoice)
+        : await onAddInvoice(invoice);
+      if (result === false) return;
 
-    resetForm();
-    setViewMode('LIST');
+      if (!editingInvoice) {
+        setServerCurrentPage(1);
+      }
+      setRefreshKey(key => key + 1);
+      markAssessmentRegistrationBilled(invoice);
+
+      resetForm();
+      setViewMode('LIST');
+    } finally {
+      setIsSubmittingInvoice(false);
+    }
   };
 
   // Post invoice
-  const handlePost = (invoice: Invoice) => {
+  const handlePost = async (invoice: Invoice) => {
     // Subsidiary Ledger: For sponsor-billed invoices, create StudentLedger entries for each student in the batch
     if (invoice.sponsorId && onAddStudentLedgerEntry) {
       // Find all enrollments for this sponsor and batch
@@ -1910,27 +1929,25 @@ const brandColor = organization?.primaryColor || '#059669';
         });
       });
     }
-    if (onPostInvoice) {
-      onPostInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() });
-    } else {
-      onUpdateInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() });
-    }
+    const result = onPostInvoice
+      ? await onPostInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() })
+      : await onUpdateInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() });
+    if (result === false) return;
     setRefreshKey(key => key + 1);
   };
 
   // Void invoice
-  const handleVoid = () => {
+  const handleVoid = async () => {
     if (voidingInvoice && voidReason.trim()) {
-      if (onVoidInvoice) {
-        onVoidInvoice(voidingInvoice.id, voidReason);
-      } else {
-        onUpdateInvoice({
-          ...voidingInvoice,
-          status: 'VOIDED',
-          voidedAt: new Date().toISOString(),
-          voidReason
-        });
-      }
+      const result = onVoidInvoice
+        ? await onVoidInvoice(voidingInvoice.id, voidReason)
+        : await onUpdateInvoice({
+            ...voidingInvoice,
+            status: 'VOIDED',
+            voidedAt: new Date().toISOString(),
+            voidReason
+          });
+      if (result === false) return;
       setRefreshKey(key => key + 1);
       setShowVoidModal(false);
       setVoidingInvoice(null);
@@ -1976,7 +1993,7 @@ const brandColor = organization?.primaryColor || '#059669';
       filters.push({
         column: 'status',
         operator: 'eq',
-        value: statusFilter === 'ON_HOLD' ? 'ON_HOLD' : statusFilter
+        value: statusFilter === 'ON_HOLD' ? 'DRAFT' : statusFilter
       });
     }
 
@@ -2004,9 +2021,18 @@ const brandColor = organization?.primaryColor || '#059669';
 
   const invoiceOrderBy = useMemo<PageOrder[]>(() => {
     if (sortConfig.direction === 'none') {
-      return [{ column: 'invoice_date', ascending: false }];
+      return [
+        { column: 'invoice_date', ascending: false },
+        { column: 'created_at', ascending: false }
+      ];
     }
-    return [{ column: serverSortColumn, ascending: sortConfig.direction === 'asc' }];
+    if (serverSortColumn === 'created_at') {
+      return [{ column: 'created_at', ascending: sortConfig.direction === 'asc' }];
+    }
+    return [
+      { column: serverSortColumn, ascending: sortConfig.direction === 'asc' },
+      { column: 'created_at', ascending: false }
+    ];
   }, [serverSortColumn, sortConfig.direction]);
 
   useEffect(() => {
@@ -3259,7 +3285,8 @@ const brandColor = organization?.primaryColor || '#059669';
   };
 
   // Handle generate invoice submission
-  const handleGenerateInvoice = () => {
+  const handleGenerateInvoice = async () => {
+    if (isSubmittingInvoice) return;
     if (selectedEnrollmentIds.size === 0) {
       alert('Please select at least one enrollment to bill.');
       return;
@@ -3323,26 +3350,34 @@ const brandColor = organization?.primaryColor || '#059669';
     };
 
     // Add the invoice
-    onAddInvoice(invoice);
-    setRefreshKey(key => key + 1);
+    setIsSubmittingInvoice(true);
+    try {
+      const result = await onAddInvoice(invoice);
+      if (result === false) return;
 
-    // Update enrollment billing status to BILLED
-    if (onUpdateEnrollment) {
-      selectedEnrollmentIds.forEach(enrollmentId => {
-        const enrollment = enrollments.find(e => e.id === enrollmentId);
-        if (enrollment) {
-          onUpdateEnrollment({
-            ...enrollment,
-            billingStatus: 'BILLED',
-            updatedAt: new Date().toISOString()
-          });
-        }
-      });
+      setServerCurrentPage(1);
+      setRefreshKey(key => key + 1);
+
+      // Update enrollment billing status to BILLED
+      if (onUpdateEnrollment) {
+        selectedEnrollmentIds.forEach(enrollmentId => {
+          const enrollment = enrollments.find(e => e.id === enrollmentId);
+          if (enrollment) {
+            onUpdateEnrollment({
+              ...enrollment,
+              billingStatus: 'BILLED',
+              updatedAt: new Date().toISOString()
+            });
+          }
+        });
+      }
+
+      // Close modal and reset
+      setShowGenerateModal(false);
+      resetGenerateModal();
+    } finally {
+      setIsSubmittingInvoice(false);
     }
-
-    // Close modal and reset
-    setShowGenerateModal(false);
-    resetGenerateModal();
   };
 
   return (
