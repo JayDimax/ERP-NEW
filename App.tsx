@@ -2581,15 +2581,94 @@ export default function App() {
     setJournalFormMode('new');
   };
 
-  const handleViewJournal = (journalEntryId: string, sourceLines?: InvoiceLine[]) => {
-    const normalizedId = journalEntryId.trim();
-    const entry = journalEntries.find(e =>
-      e.id === normalizedId ||
-      (e.glEntryNumber || '').trim() === normalizedId ||
-      (e.reference || '').trim() === normalizedId ||
-      (e.sourceRef || '').trim() === normalizedId
-    );
-    if (!entry) return;
+  const handleViewJournal = async (journalEntryId: string, sourceLines?: InvoiceLine[]) => {
+    const normalizedId = String(journalEntryId || '').trim();
+    if (!normalizedId) return;
+
+    const normalizeGlKey = (val?: string | null) => {
+      const raw = String(val || '').trim();
+      if (!raw) return '';
+      const match = raw.match(/^GL-?(\d+)$/i);
+      return match ? `GL${match[1].padStart(8, '0')}` : raw.toUpperCase();
+    };
+    const targetGlKey = normalizeGlKey(normalizedId);
+
+    const matchesTarget = (e: JournalEntry) => {
+      if (!e) return false;
+      const entryId = String(e.id || '').trim();
+      const entryGl = String(e.glEntryNumber || '').trim();
+      const entryRef = String(e.reference || '').trim();
+      const entrySourceRef = String(e.sourceRef || '').trim();
+      return (
+        entryId === normalizedId ||
+        entryGl === normalizedId ||
+        entryRef === normalizedId ||
+        entrySourceRef === normalizedId ||
+        (targetGlKey !== '' && (
+          normalizeGlKey(entryGl) === targetGlKey ||
+          normalizeGlKey(entryRef) === targetGlKey ||
+          normalizeGlKey(resolveJournalRef(e)) === targetGlKey
+        ))
+      );
+    };
+
+    const findMatchingEntry = (list: JournalEntry[]): JournalEntry | undefined => {
+      const orgScoped = currentOrgId ? list.filter(e => e.orgId === currentOrgId) : list;
+      const direct = orgScoped.find(matchesTarget) || list.find(matchesTarget);
+      if (direct) return direct;
+
+      // Secondary lookup via matching invoice (e.g. if clicked target was invoice GL ref or ID)
+      const relatedInvoice = invoices.find(inv =>
+        (!currentOrgId || inv.orgId === currentOrgId) &&
+        (
+          inv.id === normalizedId ||
+          inv.journalEntryId === normalizedId ||
+          normalizeGlKey(inv.glEntryNumber) === targetGlKey
+        )
+      );
+      if (relatedInvoice) {
+        return orgScoped.find(e =>
+          (relatedInvoice.journalEntryId && e.id === relatedInvoice.journalEntryId) ||
+          (String(e.sourceType || '').toUpperCase() === 'INVOICE' && (
+            e.sourceRef === relatedInvoice.id ||
+            e.sourceRef === relatedInvoice.invoiceNo
+          ))
+        );
+      }
+      return undefined;
+    };
+
+    let entry = findMatchingEntry(journalEntries);
+
+    if (!entry) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedId);
+        if (isUuid && typeof (dataService as any).getJournalEntryById === 'function') {
+          const fetchedById = await (dataService as any).getJournalEntryById(normalizedId);
+          if (fetchedById && (!currentOrgId || fetchedById.orgId === currentOrgId)) {
+            entry = fetchedById as JournalEntry;
+            setJournalEntries(prev => prev.some(e => e.id === entry!.id) ? prev : [...prev, entry!]);
+          }
+        }
+        if (!entry && currentOrgId && typeof dataService.getJournalEntriesByOrg === 'function') {
+          const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
+          if (Array.isArray(refreshedEntries) && refreshedEntries.length > 0) {
+            setJournalEntries(prev => {
+              const otherOrg = prev.filter(e => e.orgId !== currentOrgId);
+              return [...otherOrg, ...refreshedEntries];
+            });
+            entry = findMatchingEntry(refreshedEntries);
+          }
+        }
+      } catch (err) {
+        console.error('[App] Failed to fetch journal entry for viewing:', err);
+      }
+    }
+
+    if (!entry) {
+      handleNotify('warning', `Journal entry (${normalizedId}) could not be found.`);
+      return;
+    }
 
     const sourceType = String(entry.sourceType || '').toUpperCase();
     const sourceInvoice = sourceType === 'INVOICE'
@@ -2609,7 +2688,21 @@ export default function App() {
         : entry
     );
 
-    const entryLines = journalLines.filter(line => line.journalEntryId === entry.id);
+    let entryLines = journalLines.filter(line => line.journalEntryId === entry!.id);
+    if (entryLines.length === 0 && typeof dataService.getJournalLinesByEntry === 'function') {
+      try {
+        const fetchedLines = await dataService.getJournalLinesByEntry(entry.id);
+        if (Array.isArray(fetchedLines) && fetchedLines.length > 0) {
+          entryLines = fetchedLines;
+          setJournalLines(prev => {
+            const remaining = prev.filter(line => line.journalEntryId !== entry!.id);
+            return [...remaining, ...fetchedLines];
+          });
+        }
+      } catch (err) {
+        console.error('[App] Failed to fetch journal lines for viewing:', err);
+      }
+    }
     const enrichedLines = sourceType === 'INVOICE'
       ? (() => {
           const sourceInvoiceLines = (sourceLines && sourceLines.length > 0)
@@ -5367,9 +5460,12 @@ export default function App() {
     };
 
     const savedJournalEntry = await handlePostJournal(jeEntry, jLines);
+    if (!savedJournalEntry?.id) {
+      return null;
+    }
     return {
-      jeId: savedJournalEntry?.id || jeId,
-      glRef,
+      jeId: savedJournalEntry.id,
+      glRef: resolveJournalRef(savedJournalEntry) || glRef,
       now
     };
   };
