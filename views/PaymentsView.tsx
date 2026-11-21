@@ -44,11 +44,11 @@ interface PaymentsViewProps {
   accounts: ChartOfAccount[];
   journalEntries: JournalEntry[];
   currency: string;
-  onAddPayment: (payment: Payment) => void;
-  onUpdatePayment: (payment: Payment) => void;
+  onAddPayment: (payment: Payment) => Promise<void> | void;
+  onUpdatePayment: (payment: Payment) => Promise<void> | void;
   onDeletePayment: (id: string) => Promise<boolean>;
-  onPostPayment?: (payment: Payment) => void;
-  onVoidPayment?: (id: string, reason: string) => void;
+  onPostPayment?: (payment: Payment) => Promise<void> | void;
+  onVoidPayment?: (id: string, reason: string) => Promise<void> | void;
   onApplyToInvoice?: (paymentId: string, invoiceId: string, amount: number) => Promise<void> | void;
   onReverseApplication?: (paymentId: string, applicationId: string, reason: string) => void;
   onViewJournal?: (journalEntryId: string) => void;
@@ -56,7 +56,7 @@ interface PaymentsViewProps {
   onClearContext?: () => void;
 }
 
-type PayorType = 'SPONSOR' | 'STUDENT';
+type PayorType = 'SPONSOR' | 'STUDENT' | 'OTHER';
 type ViewMode = 'list' | 'create-payment' | 'apply-payment' | 'payment-details';
 type ListTab = 'payments' | 'applications';
 type ApplicationListTab = 'unapplied' | 'applied';
@@ -90,8 +90,152 @@ type ApplyPaymentColumn = {
 };
 
 const PAYMENT_PAGE_SIZE = 7;
-const PAYMENT_COLUMNS = 'id,org_id,payment_no,sponsor_id,student_id,payment_date,status,payment_method,ref_no,bank_account_id,check_number,check_date,amount_received,ewt_amount_certified,total_applied,customer_deposit_balance,journal_entry_id,voided_at,voided_by,void_reason,posted_at,posted_by,notes,created_at,created_by,updated_at,updated_by,is_deleted,deleted_at,deleted_by';
+const PAYMENT_COLUMNS = 'id,org_id,payment_no,sponsor_id,student_id,other_customer_name,payment_date,status,payment_method,ref_no,bank_account_id,check_number,check_date,amount_received,ewt_amount_certified,total_applied,customer_deposit_balance,journal_entry_id,voided_at,voided_by,void_reason,posted_at,posted_by,notes,created_at,created_by,updated_at,updated_by,is_deleted,deleted_at,deleted_by';
 const PAYMENT_APPLICATION_COLUMNS = 'id,org_id,payment_id,invoice_id,application_no,amount_applied,is_reversed,reversal_reason,reversed_at,reversed_by,gl_reference,journal_entry_id,created_at,created_by,updated_at,updated_by';
+
+interface PayorSearchOption {
+  id: string;
+  label: string;
+  sublabel?: string;
+  searchText: string;
+}
+
+const SearchablePayorSelect: React.FC<{
+  options: PayorSearchOption[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder: string;
+  ariaLabel: string;
+  disabled?: boolean;
+  emptyMessage?: string;
+}> = ({
+  options,
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  disabled = false,
+  emptyMessage = 'No matching payor found.'
+}) => {
+  const selectedOption = options.find(opt => opt.id === value);
+  const [query, setQuery] = useState(selectedOption ? selectedOption.label : '');
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(selectedOption ? selectedOption.label : '');
+  }, [selectedOption?.id, selectedOption?.label]);
+
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const matches = options.filter(opt => {
+      if (!normalizedQuery || (selectedOption && query === selectedOption.label)) return true;
+      return opt.searchText.includes(normalizedQuery);
+    });
+    return matches.sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+  }, [options, query, selectedOption]);
+
+  const selectOption = (opt: PayorSearchOption) => {
+    onChange(opt.id);
+    setQuery(opt.label);
+    setIsOpen(false);
+    setActiveIndex(0);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative mt-1"
+      onBlur={event => {
+        if (!containerRef.current?.contains(event.relatedTarget as Node)) {
+          setIsOpen(false);
+          setQuery(selectedOption ? selectedOption.label : '');
+        }
+      }}
+    >
+      <div className="relative">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="text"
+          role="combobox"
+          aria-label={ariaLabel}
+          aria-expanded={isOpen}
+          aria-autocomplete="list"
+          value={query}
+          disabled={disabled}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-9 text-sm text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500"
+          onFocus={() => setIsOpen(true)}
+          onChange={event => {
+            setQuery(event.target.value);
+            if (value) onChange('');
+            setActiveIndex(0);
+            setIsOpen(true);
+          }}
+          onKeyDown={event => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setIsOpen(true);
+              setActiveIndex(index => Math.min(index + 1, Math.max(0, filteredOptions.length - 1)));
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setActiveIndex(index => Math.max(0, index - 1));
+            } else if (event.key === 'Enter' && isOpen && filteredOptions[activeIndex]) {
+              event.preventDefault();
+              selectOption(filteredOptions[activeIndex]);
+            } else if (event.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+        />
+        {(query || value) && !disabled && (
+          <button
+            type="button"
+            aria-label={`Clear ${ariaLabel}`}
+            onClick={() => {
+              onChange('');
+              setQuery('');
+              setActiveIndex(0);
+              setIsOpen(true);
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
+      {isOpen && !disabled && (
+        <div role="listbox" className="absolute z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-xl">
+          {filteredOptions.length === 0 ? (
+            <div className="px-3 py-2 text-xs text-gray-500">{emptyMessage}</div>
+          ) : (
+            filteredOptions.map((opt, index) => (
+              <button
+                key={opt.id}
+                type="button"
+                role="option"
+                aria-selected={opt.id === value}
+                onMouseDown={event => {
+                  event.preventDefault();
+                  selectOption(opt);
+                }}
+                className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm transition-colors ${
+                  index === activeIndex || opt.id === value
+                    ? 'bg-emerald-50 font-semibold text-emerald-900'
+                    : 'text-gray-800 hover:bg-gray-50'
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {opt.sublabel && <span className="ml-2 shrink-0 text-xs text-gray-400">{opt.sublabel}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const PaymentsView: React.FC<PaymentsViewProps> = ({
   currentOrgId,
@@ -147,6 +291,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
   const [isLoadingPaymentPage, setIsLoadingPaymentPage] = useState(false);
   const [paymentPageError, setPaymentPageError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   
   // Application state
   const [invoiceApplyMap, setInvoiceApplyMap] = useState<Record<string, number>>({});
@@ -195,6 +340,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     crNo: '',
     sponsorId: '',
     studentId: '',
+    otherCustomerName: '',
     paymentDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'BANK_TRANSFER' as PaymentMethod,
     refNo: '',
@@ -216,7 +362,11 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     return () => window.clearTimeout(timer);
   }, [searchTerm]);
 
-  const selectedPayorId = payorType === 'SPONSOR' ? formData.sponsorId : formData.studentId;
+  const selectedPayorId = payorType === 'SPONSOR'
+    ? formData.sponsorId
+    : payorType === 'STUDENT'
+      ? formData.studentId
+      : formData.otherCustomerName.trim();
   // Read-only for posted/voided payments when viewing, or for payments with certain statuses
   const isReadOnly = editingPayment && (editingPayment.status === 'POSTED' || editingPayment.status === 'VOIDED' || editingPayment.status === 'OPEN' || editingPayment.status === 'CLOSED');
 
@@ -355,14 +505,20 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   const getPayorName = (payment: Payment) => {
     if (payment.sponsorId) return sponsors.find(s => s.id === payment.sponsorId)?.name || '-';
-    const student = students.find(s => s.id === payment.studentId);
-    return student ? `${student.lastName}, ${student.firstName}` : '-';
+    if (payment.studentId) {
+      const student = students.find(s => s.id === payment.studentId);
+      return student ? `${student.lastName}, ${student.firstName}` : '-';
+    }
+    return String(payment.otherCustomerName || '').trim() || '-';
   };
 
   const getInvoicePayorName = (invoice: Invoice) => {
     if (invoice.sponsorId) return sponsors.find(s => s.id === invoice.sponsorId)?.name || '-';
-    const student = students.find(s => s.id === invoice.studentId);
-    return student ? `${student.lastName}, ${student.firstName}` : '-';
+    if (invoice.studentId) {
+      const student = students.find(s => s.id === invoice.studentId);
+      return student ? `${student.lastName}, ${student.firstName}` : '-';
+    }
+    return String(invoice.otherCustomerName || '').trim() || '-';
   };
 
   const selectedSourceInvoice = useMemo(
@@ -381,14 +537,15 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
         if (selectedId && invoice.id === selectedId) return true;
         if (!hasSelectedPayor) return false;
         if (payorType === 'SPONSOR') return invoice.sponsorId === formData.sponsorId && invoice.status === 'OPEN';
-        return invoice.studentId === formData.studentId && invoice.status === 'OPEN';
+        if (payorType === 'STUDENT') return invoice.studentId === formData.studentId && invoice.status === 'OPEN';
+        return !invoice.sponsorId && !invoice.studentId && String(invoice.otherCustomerName || '').trim().toLowerCase() === formData.otherCustomerName.trim().toLowerCase() && invoice.status === 'OPEN';
       })
       .sort((a, b) => {
         const dateDiff = new Date(b.invoiceDate || 0).getTime() - new Date(a.invoiceDate || 0).getTime();
         if (dateDiff !== 0) return dateDiff;
         return String(a.invoiceNo || '').localeCompare(String(b.invoiceNo || ''), undefined, { numeric: true, sensitivity: 'base' });
       });
-  }, [invoices, sourceInvoiceId, selectedPayorId, currentOrgId, payorType, formData.sponsorId, formData.studentId]);
+  }, [invoices, sourceInvoiceId, selectedPayorId, currentOrgId, payorType, formData.sponsorId, formData.studentId, formData.otherCustomerName]);
 
   const existingLinkedInvoicePayment = useMemo(() => {
     if (!sourceInvoiceId) return null;
@@ -460,15 +617,44 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
   const getPaymentApplicationJournalEntry = (application: PaymentApplication) => {
     const savedReference = String(application.glReference || '').trim();
     const applicationNo = getPaymentApplicationNo(application);
-    return journalEntries.find(je =>
-      (application.journalEntryId && je.id === application.journalEntryId) ||
-      (
-        String(je.sourceType || '').toUpperCase() === 'APPLICATION' &&
-        (je.sourceRef === application.id || je.reference === applicationNo)
-      ) ||
-      (!!savedReference && (je.glEntryNumber === savedReference || je.reference === savedReference)) ||
-      (!!applicationNo && je.reference === applicationNo)
+    const linkedInvoice = invoices.find(inv => inv.id === application.invoiceId);
+    const linkedInvoiceNo = String(linkedInvoice?.invoiceNo || '').trim().toLowerCase();
+
+    // Match in strict priority order so an earlier reversed/stale APPLICATION entry
+    // with the same invoice or applicationNo never hijacks an exact journalEntryId or glReference match.
+    if (application.journalEntryId) {
+      const byId = journalEntries.find(je => je.id === application.journalEntryId);
+      if (byId) return byId;
+    }
+
+    if (savedReference) {
+      const bySavedRef = journalEntries.find(
+        je => je.glEntryNumber === savedReference || je.reference === savedReference
+      );
+      if (bySavedRef) return bySavedRef;
+    }
+
+    const bySourceRef = journalEntries.find(
+      je => String(je.sourceType || '').toUpperCase() === 'APPLICATION' && je.sourceRef === application.id
     );
+    if (bySourceRef) return bySourceRef;
+
+    if (applicationNo) {
+      const byAppNo = journalEntries.find(
+        je => String(je.sourceType || '').toUpperCase() === 'APPLICATION' && je.reference === applicationNo
+      ) || journalEntries.find(je => je.reference === applicationNo);
+      if (byAppNo) return byAppNo;
+    }
+
+    if (linkedInvoiceNo) {
+      return journalEntries.find(
+        je =>
+          String(je.sourceType || '').toUpperCase() === 'APPLICATION' &&
+          String(je.description || '').toLowerCase().includes(linkedInvoiceNo)
+      );
+    }
+
+    return undefined;
   };
 
   const getPaymentApplicationGlReference = (application: PaymentApplication) => {
@@ -487,15 +673,31 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   const getPaymentJournalEntry = (payment: Payment) => {
     const savedReference = String(payment.glEntryNumber || '').trim();
-    return journalEntries.find(je =>
-      (payment.journalEntryId && je.id === payment.journalEntryId) ||
-      (
-        String(je.sourceType || '').toUpperCase() === 'PAYMENT' &&
-        (je.sourceRef === payment.id || je.reference === payment.paymentNo)
-      ) ||
-      (!!savedReference && (je.glEntryNumber === savedReference || je.reference === savedReference)) ||
-      (!!payment.paymentNo && je.reference === payment.paymentNo)
+
+    if (payment.journalEntryId) {
+      const byId = journalEntries.find(je => je.id === payment.journalEntryId);
+      if (byId) return byId;
+    }
+
+    if (savedReference) {
+      const bySavedRef = journalEntries.find(
+        je => je.glEntryNumber === savedReference || je.reference === savedReference
+      );
+      if (bySavedRef) return bySavedRef;
+    }
+
+    const bySourceRef = journalEntries.find(
+      je => String(je.sourceType || '').toUpperCase() === 'PAYMENT' && je.sourceRef === payment.id
     );
+    if (bySourceRef) return bySourceRef;
+
+    if (payment.paymentNo) {
+      return journalEntries.find(
+        je => String(je.sourceType || '').toUpperCase() === 'PAYMENT' && je.reference === payment.paymentNo
+      ) || journalEntries.find(je => je.reference === payment.paymentNo);
+    }
+
+    return undefined;
   };
 
   const getPaymentGlReference = (payment: Payment) => {
@@ -671,15 +873,17 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
   // Resolve GL accounts for payment posting
   const resolvePaymentGlAccounts = () => {
     const normalizedName = (name?: string) => (name || '').toLowerCase();
+    const orgPostingAccounts = accounts.filter(a => (!a.orgId || a.orgId === currentOrgId) && !a.isHeader);
+    const defaultAcctList = orgPostingAccounts.length > 0 ? orgPostingAccounts : accounts;
     const byName = (patterns: string[], acctList?: ChartOfAccount[]) => {
-      const acctSet = acctList || accounts;
+      const acctSet = acctList || defaultAcctList;
       return acctSet.find(a => {
         const name = normalizedName(a.name);
         return patterns.every(p => name.includes(p));
       });
     };
     const byCode = (codes: string[], acctList?: ChartOfAccount[]) => {
-      const acctSet = acctList || accounts;
+      const acctSet = acctList || defaultAcctList;
       return acctSet.find(a => codes.includes(a.code || ''));
     };
 
@@ -766,6 +970,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     crNo: '',
     sponsorId: '',
     studentId: '',
+    otherCustomerName: '',
     paymentDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'BANK_TRANSFER' as PaymentMethod,
     refNo: '',
@@ -821,7 +1026,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     
     setEditingPayment(payment);
     setSourceInvoiceId((payment as Payment & { sourceInvoiceId?: string }).sourceInvoiceId);
-    setPayorType(payment.sponsorId ? 'SPONSOR' : 'STUDENT');
+    setPayorType(payment.sponsorId ? 'SPONSOR' : payment.studentId ? 'STUDENT' : 'OTHER');
     setInvoiceApplyMap({});
     setInvoiceSelectionMap({});
     setFormData({
@@ -829,6 +1034,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       crNo: payment.crNo || '',
       sponsorId: payment.sponsorId || '',
       studentId: payment.studentId || '',
+      otherCustomerName: payment.otherCustomerName || '',
       paymentDate: payment.paymentDate,
       paymentMethod: payment.paymentMethod,
       refNo: payment.refNo || '',
@@ -849,7 +1055,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       const result = await DataServiceFactory.getService().fetchPage<PaymentApplication>('payment_applications', {
         page: 1,
         pageSize: 200,
-        columns: PAYMENT_APPLICATION_COLUMNS,
+        columns: '*',
         filters: [{ column: 'payment_id', operator: 'eq', value: payment.id }],
         orderBy: [{ column: 'created_at', ascending: true }]
       });
@@ -865,7 +1071,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     const hydratedPayment = await hydratePaymentApplications(payment);
     setEditingPayment(hydratedPayment);
     setSourceInvoiceId((hydratedPayment as Payment & { sourceInvoiceId?: string }).sourceInvoiceId);
-    setPayorType(hydratedPayment.sponsorId ? 'SPONSOR' : 'STUDENT');
+    setPayorType(hydratedPayment.sponsorId ? 'SPONSOR' : hydratedPayment.studentId ? 'STUDENT' : 'OTHER');
     setInvoiceApplyMap({});
     setInvoiceSelectionMap({});
     setFormData({
@@ -873,6 +1079,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       crNo: hydratedPayment.crNo || '',
       sponsorId: hydratedPayment.sponsorId || '',
       studentId: hydratedPayment.studentId || '',
+      otherCustomerName: hydratedPayment.otherCustomerName || '',
       paymentDate: hydratedPayment.paymentDate,
       paymentMethod: hydratedPayment.paymentMethod,
       refNo: hydratedPayment.refNo || '',
@@ -895,7 +1102,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
   const loadPaymentForApplication = (payment: Payment) => {
     setEditingPayment(payment);
     setSourceInvoiceId((payment as Payment & { sourceInvoiceId?: string }).sourceInvoiceId);
-    setPayorType(payment.sponsorId ? 'SPONSOR' : 'STUDENT');
+    setPayorType(payment.sponsorId ? 'SPONSOR' : payment.studentId ? 'STUDENT' : 'OTHER');
     setInvoiceApplyMap({});
     setInvoiceSelectionMap({});
     setTransactionDescriptions({});
@@ -904,6 +1111,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       crNo: payment.crNo || '',
       sponsorId: payment.sponsorId || '',
       studentId: payment.studentId || '',
+      otherCustomerName: payment.otherCustomerName || '',
       paymentDate: payment.paymentDate,
       paymentMethod: payment.paymentMethod,
       refNo: payment.refNo || '',
@@ -1133,7 +1341,8 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
           if (activeAppliedInvoiceIds.has(inv.id)) return false;
           if (Number(inv.balanceDue ?? 0) <= 0.01 || inv.status === 'CLOSED') return false;
           if (payorType === 'SPONSOR') return inv.sponsorId === formData.sponsorId;
-          return inv.studentId === formData.studentId;
+          if (payorType === 'STUDENT') return inv.studentId === formData.studentId;
+          return !inv.sponsorId && !inv.studentId && String(inv.otherCustomerName || '').trim().toLowerCase() === formData.otherCustomerName.trim().toLowerCase();
         })
         .sort((a, b) => new Date(b.invoiceDate || 0).getTime() - new Date(a.invoiceDate || 0).getTime());
       setOpenInvoicesForPayor(fetchedPayorInvoices);
@@ -1143,7 +1352,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [selectedPayorId, payorType, formData.sponsorId, formData.studentId, invoices, currentOrgId, activeAppliedInvoiceIds]);
+  }, [selectedPayorId, payorType, formData.sponsorId, formData.studentId, formData.otherCustomerName, invoices, currentOrgId, activeAppliedInvoiceIds]);
 
   useEffect(() => {
     if (!editingPayment && defaultCashAccountId && !formData.bankAccountId) {
@@ -1177,13 +1386,14 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       setSourceInvoiceId(inv.id);
       setInvoiceApplyMap({});
       setInvoiceSelectionMap({});
-      setPayorType(inv.sponsorId ? 'SPONSOR' : 'STUDENT');
+      setPayorType(inv.sponsorId ? 'SPONSOR' : inv.studentId ? 'STUDENT' : 'OTHER');
       const payorLabel = getInvoicePayorName(inv);
       setFormData({
         paymentNo: generatePaymentNo(),
         crNo: '',
         sponsorId: inv.sponsorId || '',
         studentId: inv.studentId || '',
+        otherCustomerName: inv.otherCustomerName || '',
         paymentDate: new Date().toISOString().split('T')[0],
         paymentMethod: 'BANK_TRANSFER',
         refNo: '',
@@ -1245,6 +1455,17 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       return patterns.every(pattern => name.includes(pattern));
     });
 
+    if (invoice?.studentId && !invoice?.sponsorId) {
+      return (
+        byName(['accounts', 'receivable', 'student']) ||
+        byName(['receivable', 'student']) ||
+        coa.find(a => a.code === '11100') ||
+        byName(['accounts', 'receivable']) ||
+        byName(['receivable']) ||
+        coa.find(a => a.class === AccountClass.ASSET)
+      );
+    }
+
     return (
       (preferredAccountId ? coa.find(a => a.id === preferredAccountId || a.code === preferredAccountId) : undefined) ||
       byName(['accounts', 'receivable']) ||
@@ -1260,7 +1481,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       debit: line.debit,
       credit: line.credit
     }));
-  }, [formData.bankAccountId, formData.amountReceived, formData.ewtAmountCertified, accounts]);
+  }, [formData.bankAccountId, formData.amountReceived, formData.ewtAmountCertified, formData.sponsorId, formData.studentId, payorType, accounts, currentOrgId]);
 
   const selectedApplicationInvoices = useMemo(() => {
     return openInvoicesForPayor.filter(invoice =>
@@ -1292,7 +1513,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     });
 
     return rows;
-  }, [accounts, currentOrgId, formData.bankAccountId, invoiceApplyMap, plannedAppliedTotal, selectedApplicationInvoices, sponsors]);
+  }, [accounts, currentOrgId, formData.bankAccountId, formData.sponsorId, formData.studentId, payorType, invoiceApplyMap, plannedAppliedTotal, selectedApplicationInvoices, sponsors]);
 
   const applicationGlHasMissingAccounts = applicationGlImpactRows.some(row => row.missing);
 
@@ -1304,7 +1525,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     if (existingLinkedInvoicePayment) {
       return `A payment already exists for invoice ${selectedSourceInvoice.invoiceNo} (${existingLinkedInvoicePayment.paymentNo}, ${existingLinkedInvoicePaymentStatusLabel}). Review, edit, or complete the existing payment instead of creating a new one.`;
     }
-    if (!formData.sponsorId && !formData.studentId) return 'Select a sponsor or student.';
+    if (!formData.sponsorId && !formData.studentId && !String(formData.otherCustomerName || '').trim()) return 'Select a sponsor, student, or enter an Other payor name.';
     if (!String(formData.notes || '').trim()) return 'Transaction Description is required.';
     if (!String(formData.crNo || '').trim()) return 'C.R. No. is required.';
     if (baseTotalCredit <= 0) return 'Amount received or EWT must be greater than zero.';
@@ -1337,6 +1558,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       sourceInvoiceId: sourceInvoiceId || undefined,
       sponsorId: formData.sponsorId || undefined,
       studentId: formData.studentId || undefined,
+      otherCustomerName: String(formData.otherCustomerName || '').trim() || undefined,
       paymentDate: formData.paymentDate,
       status,
       paymentMethod: formData.paymentMethod,
@@ -1358,7 +1580,8 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     return payment as Payment;
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
+    if (isSubmittingPayment) return;
     const error = validateHeader();
     if (error) {
       alert(error);
@@ -1367,14 +1590,21 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
     // Save as draft without posting to GL
     const payment = buildPayment('DRAFT');
-    if (editingPayment) onUpdatePayment(payment);
-    else onAddPayment(payment);
-    setRefreshKey(key => key + 1);
-    setViewMode('list');
-    setEditingPayment(null);
+    setIsSubmittingPayment(true);
+    try {
+      if (editingPayment) await onUpdatePayment(payment);
+      else await onAddPayment(payment);
+      if (!editingPayment) setServerCurrentPage(1);
+      setRefreshKey(key => key + 1);
+      setViewMode('list');
+      setEditingPayment(null);
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
-  const handleSavePayment = () => {
+  const handleSavePayment = async () => {
+    if (isSubmittingPayment) return;
     const error = validateHeader();
     if (error) {
       alert(error);
@@ -1383,18 +1613,24 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
     // Approve and post to GL (Acumatica workflow)
     const payment = buildPayment('OPEN');
-    if (editingPayment) {
-      onUpdatePayment(payment);
-      // Call onPostPayment for existing draft payments being posted for the first time
-      if (editingPayment.status === 'DRAFT' && onPostPayment) {
-        onPostPayment(payment);
+    setIsSubmittingPayment(true);
+    try {
+      if (editingPayment) {
+        await onUpdatePayment(payment);
+        // Call onPostPayment for existing draft payments being posted for the first time
+        if (editingPayment.status === 'DRAFT' && onPostPayment) {
+          await onPostPayment(payment);
+        }
+      } else {
+        await onAddPayment(payment);
       }
-    } else {
-      onAddPayment(payment);
+      if (!editingPayment) setServerCurrentPage(1);
+      setRefreshKey(key => key + 1);
+      setViewMode('list');
+      setEditingPayment(null);
+    } finally {
+      setIsSubmittingPayment(false);
     }
-    setRefreshKey(key => key + 1);
-    setViewMode('list');
-    setEditingPayment(null);
   };
 
   const applySelectedInvoices = async () => {
@@ -1612,11 +1848,12 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     if (!invoice) return;
 
     const payorLabel = getInvoicePayorName(invoice);
-    setPayorType(invoice.sponsorId ? 'SPONSOR' : 'STUDENT');
+    setPayorType(invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : 'OTHER');
     setFormData(prev => ({
       ...prev,
       sponsorId: invoice.sponsorId || '',
       studentId: invoice.studentId || '',
+      otherCustomerName: invoice.otherCustomerName || '',
       amountReceived: prev.amountReceived > 0 ? prev.amountReceived : Number(invoice.balanceDue ?? 0),
       notes: String(prev.notes || '').trim() ? prev.notes : (payorLabel !== '-' ? `Collection from ${payorLabel}` : 'Collection receipt')
     }));
@@ -1898,9 +2135,15 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   const paymentOrderBy = useMemo<PageOrder[]>(() => {
     if (sortConfig.direction === 'none') {
-      return [{ column: 'payment_date', ascending: false }];
+      return [
+        { column: 'payment_date', ascending: false },
+        { column: 'created_at', ascending: false }
+      ];
     }
-    return [{ column: serverSortColumn, ascending: sortConfig.direction === 'asc' }];
+    return [
+      { column: serverSortColumn, ascending: sortConfig.direction === 'asc' },
+      { column: 'created_at', ascending: false }
+    ];
   }, [serverSortColumn, sortConfig.direction]);
 
   useEffect(() => {
@@ -1948,7 +2191,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
     return () => {
       isActive = false;
     };
-  }, [debouncedSearchTerm, paymentFilters, paymentOrderBy, refreshKey, serverCurrentPage, serverFetchEnabled]);
+  }, [debouncedSearchTerm, paymentFilters, paymentOrderBy, payments.length, refreshKey, serverCurrentPage, serverFetchEnabled]);
 
   const applyRegistryFilters = (list: Payment[], mode: ListTab) => {
     const today = new Date();
@@ -3254,10 +3497,10 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                     Cancel
                   </button>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (!voidReason.trim()) return;
-                      if (onVoidPayment) onVoidPayment(voidingPayment.id, voidReason);
-                      else onUpdatePayment({ ...voidingPayment, status: 'VOIDED', voidReason, voidedAt: new Date().toISOString() });
+                      if (onVoidPayment) await onVoidPayment(voidingPayment.id, voidReason);
+                      else await onUpdatePayment({ ...voidingPayment, status: 'VOIDED', voidReason, voidedAt: new Date().toISOString() });
                       setRefreshKey(key => key + 1);
                       setShowVoidModal(false);
                       setVoidingPayment(null);
@@ -3449,7 +3692,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                             onChange={() => {
                               setPayorType('SPONSOR');
                               setSourceInvoiceId(undefined);
-                              setFormData(prev => ({ ...prev, studentId: '' }));
+                              setFormData(prev => ({ ...prev, studentId: '', otherCustomerName: '' }));
                             }}
                             disabled={isReadOnly}
                           />
@@ -3462,46 +3705,84 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                             onChange={() => {
                               setPayorType('STUDENT');
                               setSourceInvoiceId(undefined);
-                              setFormData(prev => ({ ...prev, sponsorId: '' }));
+                              setFormData(prev => ({ ...prev, sponsorId: '', otherCustomerName: '' }));
                             }}
                             disabled={isReadOnly}
                           />
                           Student
+                        </label>
+                        <label className="inline-flex items-center gap-2">
+                          <input
+                            type="radio"
+                            checked={payorType === 'OTHER'}
+                            onChange={() => {
+                              setPayorType('OTHER');
+                              setSourceInvoiceId(undefined);
+                              setFormData(prev => ({ ...prev, sponsorId: '', studentId: '' }));
+                            }}
+                            disabled={isReadOnly}
+                          />
+                          Other
                         </label>
                       </div>
                     </div>
                     <div className="md:col-span-2">
                       <label className={invoiceLabelClass}>Payor Name *</label>
                       {payorType === 'SPONSOR' ? (
-                        <select
+                        <SearchablePayorSelect
+                          ariaLabel="Select Sponsor"
+                          placeholder="Search sponsor by name..."
+                          emptyMessage="No matching sponsor found."
                           value={formData.sponsorId}
-                          onChange={e => {
-                            setSourceInvoiceId(undefined);
-                            setFormData(prev => ({ ...prev, sponsorId: e.target.value, studentId: '' }));
-                          }}
                           disabled={isReadOnly}
-                          className={invoiceInputClass}
-                        >
-                          <option value="">Select Sponsor</option>
-                          {sponsors.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <select
+                          options={sponsors
+                            .filter(s => !s.isDeleted)
+                            .map(s => ({
+                              id: s.id,
+                              label: s.name,
+                              sublabel: s.code || undefined,
+                              searchText: [s.name, s.code, s.contactPerson, s.email].filter(Boolean).join(' ').toLowerCase()
+                            }))}
+                          onChange={sponsorId => {
+                            setSourceInvoiceId(undefined);
+                            setFormData(prev => ({ ...prev, sponsorId, studentId: '', otherCustomerName: '' }));
+                          }}
+                        />
+                      ) : payorType === 'STUDENT' ? (
+                        <SearchablePayorSelect
+                          ariaLabel="Select Student"
+                          placeholder="Search student by name, ULI, or email..."
+                          emptyMessage="No matching student found."
                           value={formData.studentId}
+                          disabled={isReadOnly}
+                          options={students
+                            .filter(s => !s.isDeleted)
+                            .map(s => {
+                              const fullName = `${s.lastName}, ${s.firstName}${s.middleName ? ` ${s.middleName}` : ''}`.trim();
+                              return {
+                                id: s.id,
+                                label: fullName,
+                                sublabel: s.uli || s.studentNo || undefined,
+                                searchText: [s.lastName, s.firstName, s.middleName, fullName, s.uli, s.studentNo, s.email].filter(Boolean).join(' ').toLowerCase()
+                              };
+                            })}
+                          onChange={studentId => {
+                            setSourceInvoiceId(undefined);
+                            setFormData(prev => ({ ...prev, studentId, sponsorId: '', otherCustomerName: '' }));
+                          }}
+                        />
+                      ) : (
+                        <input
+                          type="text"
+                          value={formData.otherCustomerName}
                           onChange={e => {
                             setSourceInvoiceId(undefined);
-                            setFormData(prev => ({ ...prev, studentId: e.target.value, sponsorId: '' }));
+                            setFormData(prev => ({ ...prev, otherCustomerName: e.target.value, sponsorId: '', studentId: '' }));
                           }}
                           disabled={isReadOnly}
                           className={invoiceInputClass}
-                        >
-                          <option value="">Select Student</option>
-                          {students.map(s => (
-                            <option key={s.id} value={s.id}>{s.lastName}, {s.firstName}</option>
-                          ))}
-                        </select>
+                          placeholder="Enter Other payor name (e.g., Rental customer)"
+                        />
                       )}
                     </div>
                   </div>
@@ -3759,7 +4040,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
 
   // ===== VIEW: APPLY INVOICES =====
   if (viewMode === 'apply-payment' && editingPayment) {
-    const applicationDate = new Date().toISOString().split('T')[0];
+    const applicationDate = (editingPayment.paymentDate || new Date().toISOString()).split('T')[0];
     const applicationNoPreview = generatePaymentApplicationNo();
     const applicationGlReference = getPaymentApplicationGlReferenceLabel(editingPayment);
     const canSubmitApplication = plannedAppliedTotal > 0 && !applicationGlHasMissingAccounts;
@@ -3870,7 +4151,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                   </div>
                   <div className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-4">
                     <span className={detailLabelClass}>Payor Type</span>
-                    <span className={detailValueClass}>{editingPayment.sponsorId ? 'Sponsor' : 'Student'}</span>
+                    <span className={detailValueClass}>{editingPayment.sponsorId ? 'Sponsor' : editingPayment.studentId ? 'Student' : 'Other'}</span>
                   </div>
                   <div className="grid grid-cols-[130px_minmax(0,1fr)] items-center gap-4">
                     <span className={detailLabelClass}>Post Period</span>
@@ -4048,7 +4329,13 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
       const activeApplications = getPaymentApplicationRecords(editingPayment);
       const primaryApplication = activeApplications[0];
       const primaryApplicationJournalEntry = primaryApplication ? getPaymentApplicationJournalEntry(primaryApplication) : undefined;
-      const applicationDetailDate = (primaryApplication?.createdAt || editingPayment.updatedAt || editingPayment.paymentDate || new Date().toISOString()).split('T')[0];
+      const applicationDetailDate = (
+        primaryApplicationJournalEntry?.date ||
+        editingPayment.paymentDate ||
+        primaryApplication?.createdAt ||
+        editingPayment.updatedAt ||
+        new Date().toISOString()
+      ).split('T')[0];
       const applicationDetailNo = getPaymentApplicationNumberLabel(editingPayment);
       const applicationAppliedTotal = activeApplications.reduce((sum, app) => sum + Number(app.amountApplied || 0), 0);
       const applicationRemainingBalance = getAvailablePaymentBalance(editingPayment);
@@ -4153,7 +4440,7 @@ const PaymentsView: React.FC<PaymentsViewProps> = ({
                       </div>
                       <div>
                         <label className={invoiceLabelClass}>Payor Type</label>
-                        <input value={editingPayment.sponsorId ? 'Sponsor' : 'Student'} readOnly className={invoiceReadOnlyClass} />
+                        <input value={editingPayment.sponsorId ? 'Sponsor' : editingPayment.studentId ? 'Student' : 'Other'} readOnly className={invoiceReadOnlyClass} />
                       </div>
                       <div>
                         <label className={invoiceLabelClass}>Payment Method</label>

@@ -330,6 +330,189 @@ describe('TimeExpensesView expense selection', () => {
     });
     expect(onNotify).toHaveBeenCalledWith('success', 'Expense record created.');
   });
+
+  it('shows Select All Filtered button only when both month and claimant are selected, and toggles selection of matching open expenses', async () => {
+    const onNotify = vi.fn();
+    const multiExpenses = [
+      {
+        id: 'exp-jul-u1-a',
+        orgId: 'org-1',
+        rfqCode: 'F.R. No 101',
+        transactionDate: '2026-07-05',
+        description: 'July expense A',
+        quantity: 1,
+        unitCost: 100,
+        amount: 100,
+        expenseAccountId: 'account-1',
+        claimedBy: 'Alice Cruz',
+        employeeId: 'emp-a',
+        status: 'open',
+        createdAt: '2026-07-05T00:00:00.000Z',
+      },
+      {
+        id: 'exp-jul-u1-b',
+        orgId: 'org-1',
+        rfqCode: 'F.R. No 102',
+        transactionDate: '2026-07-18',
+        description: 'July expense B',
+        quantity: 1,
+        unitCost: 200,
+        amount: 200,
+        expenseAccountId: 'account-1',
+        claimedBy: 'Alice Cruz',
+        employeeId: 'emp-a',
+        status: 'open',
+        createdAt: '2026-07-18T00:00:00.000Z',
+      },
+      {
+        id: 'exp-jul-u1-released',
+        orgId: 'org-1',
+        rfqCode: 'F.R. No 103',
+        transactionDate: '2026-07-20',
+        description: 'July already released',
+        quantity: 1,
+        unitCost: 300,
+        amount: 300,
+        expenseAccountId: 'account-1',
+        claimedBy: 'Alice Cruz',
+        employeeId: 'emp-a',
+        status: 'released',
+        createdAt: '2026-07-20T00:00:00.000Z',
+      },
+      {
+        id: 'exp-aug-u1',
+        orgId: 'org-1',
+        rfqCode: 'F.R. No 104',
+        transactionDate: '2026-08-02',
+        description: 'August expense',
+        quantity: 1,
+        unitCost: 150,
+        amount: 150,
+        expenseAccountId: 'account-1',
+        claimedBy: 'Alice Cruz',
+        employeeId: 'emp-a',
+        status: 'open',
+        createdAt: '2026-08-02T00:00:00.000Z',
+      },
+      {
+        id: 'exp-jul-u2',
+        orgId: 'org-1',
+        rfqCode: 'F.R. No 105',
+        transactionDate: '2026-07-12',
+        description: 'July Bob expense',
+        quantity: 1,
+        unitCost: 80,
+        amount: 80,
+        expenseAccountId: 'account-1',
+        claimedBy: 'Bob Reyes',
+        employeeId: 'emp-b',
+        status: 'open',
+        createdAt: '2026-07-12T00:00:00.000Z',
+      },
+    ];
+
+    vi.spyOn(DataServiceFactory, 'getService').mockReturnValue({
+      getTimeExpensesByOrg: vi.fn().mockResolvedValue(multiExpenses),
+    } as any);
+
+    render(
+      <TimeExpensesView
+        orgId="org-1"
+        payables={[]}
+        vendors={[]}
+        accounts={[
+          { id: 'account-1', orgId: 'org-1', code: '5000', name: 'Supplies', class: 'EXPENSE', isHeader: false },
+        ] as any}
+        currency="PHP"
+        onCreatePayable={vi.fn()}
+        onNotify={onNotify}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(5));
+
+    // Not visible when neither month nor claimant is selected
+    expect(screen.queryByRole('button', { name: /select all filtered/i })).not.toBeInTheDocument();
+
+    // Select only month -> still not visible
+    fireEvent.change(screen.getByLabelText(/filter by month/i), { target: { value: '2026-07' } });
+    expect(screen.queryByRole('button', { name: /select all filtered/i })).not.toBeInTheDocument();
+
+    // Select claimant as well -> button appears for the 2 matching open expenses
+    fireEvent.change(screen.getByLabelText(/filter by claimant/i), { target: { value: 'Alice Cruz' } });
+    const selectAllButton = screen.getByRole('button', { name: /select all filtered \(2\)/i });
+    expect(selectAllButton).toBeInTheDocument();
+
+    // Click to select all matching open rows
+    fireEvent.click(selectAllButton);
+    const filteredCheckboxes = screen.getAllByRole('checkbox');
+    expect(filteredCheckboxes).toHaveLength(3); // 2 open + 1 released
+    expect(filteredCheckboxes[0]).toBeChecked();
+    expect(filteredCheckboxes[1]).toBeChecked();
+    expect(filteredCheckboxes[2]).toBeDisabled();
+    expect(screen.getByText(/selected for billing/i).parentElement).toHaveTextContent('PHP 300.00');
+
+    // Button toggles to Deselect All (2)
+    const deselectAllButton = screen.getByRole('button', { name: /deselect all \(2\)/i });
+    fireEvent.click(deselectAllButton);
+    expect(filteredCheckboxes[0]).not.toBeChecked();
+    expect(filteredCheckboxes[1]).not.toBeChecked();
+  });
+
+  it('leaves payable description and referenceDocument blank when releasing consolidated time & expenses', async () => {
+    const onCreatePayable = vi.fn().mockImplementation((payable) => Promise.resolve({ ...payable, id: 'bill-1' }));
+    const updateTimeExpense = vi.fn().mockImplementation((id, updates) => Promise.resolve({ id, ...updates }));
+    vi.spyOn(DataServiceFactory, 'getService').mockReturnValue({
+      getTimeExpensesByOrg: vi.fn().mockResolvedValue([
+        {
+          id: 'exp-1',
+          orgId: 'org-1',
+          rfqCode: 'F.R. No 5721',
+          transactionDate: '2026-11-01',
+          description: 'Supplies',
+          quantity: 1,
+          unitCost: 100,
+          amount: 100,
+          expenseAccountId: 'acc-5100',
+          claimedBy: 'Ranil Melgo',
+          employeeId: 'emp-1',
+          status: 'open',
+          createdAt: '2026-11-01T00:00:00.000Z',
+        },
+      ]),
+      updateTimeExpense,
+    } as any);
+
+    render(
+      <TimeExpensesView
+        orgId="org-1"
+        payables={[]}
+        vendors={[]}
+        accounts={[
+          { id: 'acc-5100', orgId: 'org-1', code: '5100', name: 'Supplies', class: 'EXPENSE', isHeader: false },
+          { id: 'acc-2100', orgId: 'org-1', code: '2100', name: 'Accounts Payable', class: 'LIABILITY', isHeader: false },
+        ] as any}
+        currency="PHP"
+        onCreatePayable={onCreatePayable}
+        onNotify={vi.fn()}
+      />,
+    );
+
+    const checkbox = await screen.findByRole('checkbox');
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: /release/i }));
+
+    await waitFor(() => {
+      expect(onCreatePayable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'employee_reimbursements',
+          description: '',
+          referenceDocument: '',
+          status: 'for_approval',
+        }),
+      );
+    });
+  });
 });
 
 describe('SupabaseDataService time_expenses REST persistence', () => {

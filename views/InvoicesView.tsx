@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Invoice, InvoiceLine, InvoiceStatus, Sponsor, Student, Enrollment, AssessmentRegistration, Batch, Qualification, CourseFee, ChartOfAccount, AccountClass, StudentLedger, JournalEntry, TaxCategoryEntry, Organization, User as AppUser, Payment, isProvisionalStudent } from '../types';
 import { format } from 'date-fns';
 import { generateUUID } from '../utils/uuid';
@@ -224,25 +225,81 @@ const SearchableCourseFeeSelect: React.FC<{
   onChange: (courseFeeId: string) => void;
   disabled?: boolean;
   listId?: string;
-}> = ({ fees, value, onChange, disabled = false }) => {
+}> = ({ fees, value, onChange, disabled = false, listId }) => {
   const selectedFee = fees.find(fee => fee.id === value);
   const [query, setQuery] = useState(selectedFee ? getCourseFeeOptionLabel(selectedFee) : '');
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setQuery(selectedFee ? getCourseFeeOptionLabel(selectedFee) : '');
   }, [selectedFee?.id, selectedFee?.feeCode, selectedFee?.feeName]);
 
+  const updateDropdownPosition = useCallback(() => {
+    const anchor = inputRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 1024;
+    const viewportHeight = window.innerHeight || 768;
+    const margin = 8;
+    const gap = 4;
+    const preferredMaxHeight = 240;
+
+    const width = Math.min(Math.max(rect.width, 280), Math.max(200, viewportWidth - margin * 2));
+    const left = Math.max(margin, Math.min(rect.left, viewportWidth - width - margin));
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+
+    if (openUpward) {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        bottom: viewportHeight - rect.top + gap,
+        width,
+        maxHeight: Math.max(120, Math.min(preferredMaxHeight, spaceAbove - gap)),
+        zIndex: 9999,
+      });
+    } else {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        top: rect.bottom + gap,
+        width,
+        maxHeight: Math.max(120, Math.min(preferredMaxHeight, spaceBelow - gap)),
+        zIndex: 9999,
+      });
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || disabled) return;
+    updateDropdownPosition();
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [isOpen, disabled, updateDropdownPosition]);
+
   useEffect(() => {
+    if (!isOpen) return;
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   const filteredFees = useMemo(() => {
     if (!query.trim() || (selectedFee && query === getCourseFeeOptionLabel(selectedFee))) {
@@ -255,19 +312,65 @@ const SearchableCourseFeeSelect: React.FC<{
     );
   }, [fees, query, selectedFee]);
 
+  const dropdownPortal = isOpen && !disabled && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={dropdownRef}
+        id={listId}
+        role="listbox"
+        style={dropdownStyle}
+        className="overflow-auto rounded-md border border-gray-200 bg-white shadow-xl py-1 text-xs"
+      >
+        {filteredFees.map(fee => (
+          <button
+            key={fee.id}
+            type="button"
+            role="option"
+            aria-selected={fee.id === value}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              onChange(fee.id);
+              setQuery(getCourseFeeOptionLabel(fee));
+              setIsOpen(false);
+            }}
+            className={`flex w-full items-center px-3 py-1.5 text-left transition-colors ${
+              fee.id === value
+                ? 'bg-orange-50 font-medium text-orange-900'
+                : 'text-gray-700 hover:bg-orange-50 hover:text-orange-900'
+            }`}
+          >
+            <span className="whitespace-normal break-words">{getCourseFeeOptionLabel(fee)}</span>
+          </button>
+        ))}
+        {filteredFees.length === 0 && (
+          <div className="px-3 py-2 text-gray-400 text-center">No fees found</div>
+        )}
+      </div>,
+      document.body
+    )
+    : null;
+
   return (
     <div ref={containerRef} className="relative w-full">
       <div className="relative">
         <input
+          ref={inputRef}
           type="text"
           role="combobox"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
+          aria-controls={isOpen ? listId : undefined}
           aria-label="Search course fee by name or code"
           placeholder="Search code or fee..."
           value={query}
           disabled={disabled}
           onFocus={() => setIsOpen(true)}
+          onClick={() => setIsOpen(true)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
           onChange={e => {
             setQuery(e.target.value);
             setIsOpen(true);
@@ -290,39 +393,206 @@ const SearchableCourseFeeSelect: React.FC<{
           </button>
         )}
       </div>
-      {isOpen && !disabled && (
-        <div
-          role="listbox"
-          className="absolute z-50 mt-1 max-h-48 w-full min-w-[240px] overflow-auto rounded-md border border-gray-200 bg-white shadow-lg py-1 text-xs"
-        >
-          {filteredFees.map(fee => (
-            <button
-              key={fee.id}
-              type="button"
-              role="option"
-              aria-selected={fee.id === value}
-              onMouseDown={e => e.preventDefault()}
-              onClick={() => {
-                onChange(fee.id);
-                setQuery(getCourseFeeOptionLabel(fee));
-                setIsOpen(false);
-              }}
-              className="flex w-full items-center px-3 py-1.5 text-left text-gray-700 hover:bg-orange-50 hover:text-orange-900"
-            >
-              {getCourseFeeOptionLabel(fee)}
-            </button>
-          ))}
-          {filteredFees.length === 0 && (
-            <div className="px-3 py-2 text-gray-400 text-center">No fees found</div>
-          )}
-        </div>
-      )}
+      {dropdownPortal}
+    </div>
+  );
+};
+
+const getAccountOptionLabel = (account: ChartOfAccount) =>
+  `${account.code ? `${account.code} - ` : ''}${account.name}`;
+
+const SearchableLineAccountSelect: React.FC<{
+  accounts: ChartOfAccount[];
+  value: string;
+  onChange: (accountId: string) => void;
+  disabled?: boolean;
+  ariaLabel?: string;
+  listId?: string;
+}> = ({ accounts, value, onChange, disabled = false, ariaLabel = 'Search account by code or name', listId }) => {
+  const selectableAccounts = useMemo(() => {
+    const active = accounts.filter(acc => !acc.isHeader && acc.isActive !== false);
+    return [...active].sort((a, b) => {
+      const aIsRev = a.class === AccountClass.REVENUE ? 0 : 1;
+      const bIsRev = b.class === AccountClass.REVENUE ? 0 : 1;
+      if (aIsRev !== bIsRev) return aIsRev - bIsRev;
+      return String(a.code || '').localeCompare(String(b.code || ''));
+    });
+  }, [accounts]);
+
+  const selectedAccount = selectableAccounts.find(acc => acc.id === value) || accounts.find(acc => acc.id === value);
+  const [query, setQuery] = useState(selectedAccount ? getAccountOptionLabel(selectedAccount) : '');
+  const [isOpen, setIsOpen] = useState(false);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(selectedAccount ? getAccountOptionLabel(selectedAccount) : '');
+  }, [selectedAccount?.id, selectedAccount?.code, selectedAccount?.name]);
+
+  const updateDropdownPosition = useCallback(() => {
+    const anchor = inputRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || 1024;
+    const viewportHeight = window.innerHeight || 768;
+    const margin = 8;
+    const gap = 4;
+    const preferredMaxHeight = 240;
+
+    const width = Math.min(Math.max(rect.width, 280), Math.max(200, viewportWidth - margin * 2));
+    const left = Math.max(margin, Math.min(rect.left, viewportWidth - width - margin));
+    const spaceBelow = viewportHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    const openUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+
+    if (openUpward) {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        bottom: viewportHeight - rect.top + gap,
+        width,
+        maxHeight: Math.max(120, Math.min(preferredMaxHeight, spaceAbove - gap)),
+        zIndex: 9999,
+      });
+    } else {
+      setDropdownStyle({
+        position: 'fixed',
+        left,
+        top: rect.bottom + gap,
+        width,
+        maxHeight: Math.max(120, Math.min(preferredMaxHeight, spaceBelow - gap)),
+        zIndex: 9999,
+      });
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isOpen || disabled) return;
+    updateDropdownPosition();
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [isOpen, disabled, updateDropdownPosition]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        containerRef.current && !containerRef.current.contains(target) &&
+        (!dropdownRef.current || !dropdownRef.current.contains(target))
+      ) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const filteredAccounts = useMemo(() => {
+    if (!query.trim() || (selectedAccount && query === getAccountOptionLabel(selectedAccount))) {
+      return selectableAccounts;
+    }
+    const q = query.toLowerCase();
+    return selectableAccounts.filter(acc =>
+      (acc.code || '').toLowerCase().includes(q) ||
+      (acc.name || '').toLowerCase().includes(q)
+    );
+  }, [selectableAccounts, query, selectedAccount]);
+
+  const dropdownPortal = isOpen && !disabled && typeof document !== 'undefined'
+    ? createPortal(
+      <div
+        ref={dropdownRef}
+        id={listId}
+        role="listbox"
+        style={dropdownStyle}
+        className="overflow-auto rounded-md border border-gray-200 bg-white shadow-xl py-1 text-xs"
+      >
+        {filteredAccounts.map(acc => (
+          <button
+            key={acc.id}
+            type="button"
+            role="option"
+            aria-selected={acc.id === value}
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              onChange(acc.id);
+              setQuery(getAccountOptionLabel(acc));
+              setIsOpen(false);
+            }}
+            className={`flex w-full items-center px-3 py-1.5 text-left transition-colors ${
+              acc.id === value
+                ? 'bg-orange-50 font-medium text-orange-900'
+                : 'text-gray-700 hover:bg-orange-50 hover:text-orange-900'
+            }`}
+          >
+            <span className="whitespace-normal break-words">{getAccountOptionLabel(acc)}</span>
+          </button>
+        ))}
+        {filteredAccounts.length === 0 && (
+          <div className="px-3 py-2 text-gray-400 text-center">No accounts found</div>
+        )}
+      </div>,
+      document.body
+    )
+    : null;
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+          aria-controls={isOpen ? listId : undefined}
+          aria-label={ariaLabel}
+          placeholder="Select account..."
+          value={query}
+          disabled={disabled}
+          onFocus={() => setIsOpen(true)}
+          onClick={() => setIsOpen(true)}
+          onKeyDown={e => {
+            if (e.key === 'Escape') {
+              setIsOpen(false);
+            }
+          }}
+          onChange={e => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+            if (!e.target.value) onChange('');
+          }}
+          className="w-full rounded px-2.5 py-1 pr-7 text-[13px] font-normal text-gray-700 border border-gray-200 focus:outline-none focus:ring-1 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-60"
+        />
+        {selectedAccount && !disabled && (
+          <button
+            type="button"
+            aria-label="Clear selected account"
+            onClick={() => {
+              onChange('');
+              setQuery('');
+              setIsOpen(false);
+            }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+      {dropdownPortal}
     </div>
   );
 };
 
 const INVOICE_PAGE_SIZE = 7;
-const INVOICE_COLUMNS = 'id,org_id,invoice_no,document_type,payment_method,si_no,sponsor_id,student_id,enrollment_id,batch_id,invoice_date,due_date,status,subtotal,vat_amount,grand_total,total_ewt_amount,net_amount_due,amount_paid,balance_due,ewt_rate,is_subject_to_ewt,reference,terms,notes,journal_entry_id,posted_by,posted_at,voided_by,voided_at,void_reason,is_deleted,deleted_at,deleted_by,created_at,created_by,updated_at,updated_by,vat_pricing,vat_rate,gl_entry_number,assessment_registration_id';
+const INVOICE_COLUMNS = 'id,org_id,invoice_no,document_type,payment_method,si_no,sponsor_id,student_id,other_customer_name,enrollment_id,batch_id,invoice_date,due_date,status,subtotal,vat_amount,grand_total,total_ewt_amount,net_amount_due,amount_paid,balance_due,ewt_rate,is_subject_to_ewt,reference,terms,notes,journal_entry_id,posted_by,posted_at,voided_by,voided_at,void_reason,is_deleted,deleted_at,deleted_by,created_at,created_by,updated_at,updated_by,vat_pricing,vat_rate,gl_entry_number,assessment_registration_id';
 
 const COURSE_FEE_CATEGORY_LABELS: Record<string, string> = {
   TUITION: 'Tuition',
@@ -434,11 +704,19 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
   const lineResizeRef = React.useRef<{ colKey: string; startX: number; startWidth: number } | null>(null);
 
   // Column order and drag state for line items table
-  // Default: #, Type, Course Fee, Description, Tax Category, Class, Qty, Unit Price, Amount, Actions
-  const defaultLineColOrder = [
-    'lineNumber', 'lineType', 'courseFeeId', 'description', 'taxCategoryId', 'classificationCode', 'quantity', 'unitPrice', 'amount', 'actions'
-  ];
+  // Default: #, Type, Course Fee, [Account for Non-Invoice], Description, Tax Category, Class, Qty, Unit Price, Amount, Actions
+  const defaultLineColOrder = useMemo(
+    () => (
+      isNonInvoicePayment
+        ? ['lineNumber', 'lineType', 'courseFeeId', 'glAccountId', 'description', 'taxCategoryId', 'classificationCode', 'quantity', 'unitPrice', 'amount', 'actions']
+        : ['lineNumber', 'lineType', 'courseFeeId', 'description', 'taxCategoryId', 'classificationCode', 'quantity', 'unitPrice', 'amount', 'actions']
+    ),
+    [isNonInvoicePayment]
+  );
   const [lineColOrder, setLineColOrder] = useState<string[]>(defaultLineColOrder);
+  useEffect(() => {
+    setLineColOrder(defaultLineColOrder);
+  }, [defaultLineColOrder]);
   const [draggedLineColIdx, setDraggedLineColIdx] = useState<number | null>(null);
 
   // local copy of tax categories; we fetch from backend when form is active
@@ -525,6 +803,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
         ...prev,
         studentId: createdStudent.id,
         sponsorId: '',
+        otherCustomerName: '',
         assessmentRegistrationId: prev.assessmentRegistrationId && createdStudent.id ? prev.assessmentRegistrationId : ''
       }));
       setShowQuickStudentModal(false);
@@ -580,6 +859,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     siNo: string;
     sponsorId: string;
     studentId: string;
+    otherCustomerName: string;
     enrollmentId: string;
     assessmentRegistrationId: string;
     batchId: string;
@@ -599,6 +879,7 @@ const InvoicesView: React.FC<InvoicesViewProps> = ({
     siNo: '',
     sponsorId: '',
     studentId: '',
+    otherCustomerName: '',
     enrollmentId: '',
     assessmentRegistrationId: '',
     batchId: '',
@@ -769,6 +1050,7 @@ const brandColor = organization?.primaryColor || '#059669';
       siNo: '',
       sponsorId: '',
       studentId: '',
+      otherCustomerName: '',
       enrollmentId: '',
       assessmentRegistrationId: '',
       batchId: '',
@@ -831,6 +1113,7 @@ const brandColor = organization?.primaryColor || '#059669';
       siNo: hydratedInvoice.siNo || '',
       sponsorId: hydratedInvoice.sponsorId || '',
       studentId: hydratedInvoice.studentId || '',
+      otherCustomerName: hydratedInvoice.otherCustomerName || '',
       enrollmentId: hydratedInvoice.enrollmentId || '',
       assessmentRegistrationId: hydratedInvoice.assessmentRegistrationId || '',
       batchId: hydratedInvoice.batchId || '',
@@ -1007,7 +1290,8 @@ const brandColor = organization?.primaryColor || '#059669';
   const handleSponsorChange = (sponsorId: string) => {
     setFormData(prev => ({
       ...prev,
-      sponsorId
+      sponsorId,
+      otherCustomerName: sponsorId ? '' : prev.otherCustomerName
     }));
   };
 
@@ -1490,6 +1774,7 @@ const brandColor = organization?.primaryColor || '#059669';
         case 'lineType': return { label: 'Type', getter: (line: InvoiceLine) => getLineType(line) };
         case 'classificationCode': return { label: 'Class', getter: (line: InvoiceLine) => line.classificationCode || '-' };
         case 'courseFeeId': return { label: 'Course Fee', getter: (line: InvoiceLine) => courseFees.find(cf => cf.id === line.courseFeeId)?.feeName || (line.courseFeeId || '-') };
+        case 'glAccountId': return { label: 'Account', getter: (line: InvoiceLine) => { const acc = accounts.find(a => a.id === line.glAccountId); return acc ? `${acc.code} - ${acc.name}` : '-'; } };
         case 'description': return { label: 'Description', getter: (line: InvoiceLine) => line.description || '-' };
         case 'taxCategoryId': return { label: 'Tax Category', getter: (line: InvoiceLine) => localTaxCats.find(tc => tc.id === line.taxCategoryId)?.description || (line.taxCategoryId || '-') };
         case 'quantity': return { label: 'Qty', getter: (line: InvoiceLine) => line.quantity };
@@ -1668,7 +1953,7 @@ const brandColor = organization?.primaryColor || '#059669';
       const updatedLines = [...formData.lines];
       updatedLines[index] = {
         ...updatedLines[index],
-        courseFeeId: '',
+        courseFeeId: undefined,
         lineType: 'MANUAL',
         classificationCode: ''
       };
@@ -1742,8 +2027,9 @@ const brandColor = organization?.primaryColor || '#059669';
       alert(invoiceRequiredFieldMessage || 'Required invoice fields are missing.');
       return;
     }
-    if (!formData.sponsorId && !formData.studentId) {
-      alert('Please select a customer or student.');
+    const trimmedOtherCustomerName = String(formData.otherCustomerName || '').trim();
+    if (!formData.sponsorId && !formData.studentId && !trimmedOtherCustomerName) {
+      alert('Please select a customer, student, or enter an Other bill-to name.');
       return;
     }
     if (formData.lines.length === 0) {
@@ -1772,6 +2058,7 @@ const brandColor = organization?.primaryColor || '#059669';
       siNo: isNonInvoicePayment ? String(formData.siNo || '').trim() || undefined : undefined,
       sponsorId: formData.sponsorId || undefined,
       studentId: formData.studentId || undefined,
+      otherCustomerName: trimmedOtherCustomerName || undefined,
       enrollmentId: formData.enrollmentId || undefined,
       assessmentRegistrationId: formData.assessmentRegistrationId || undefined,
       batchId: formData.batchId || undefined,
@@ -1790,7 +2077,13 @@ const brandColor = organization?.primaryColor || '#059669';
       reference: formData.reference || undefined,
       terms: formData.terms || undefined,
       notes: String(formData.notes || '').trim() || undefined,
-      lines: invoiceLines.map(l => ({ ...l, invoiceId: editingInvoice?.id || '', assessmentRegistrationId: l.assessmentRegistrationId || formData.assessmentRegistrationId || undefined })),
+      lines: invoiceLines.map(l => ({
+        ...l,
+        invoiceId: editingInvoice?.id || '',
+        courseFeeId: l.courseFeeId || undefined,
+        glAccountId: l.glAccountId || undefined,
+        assessmentRegistrationId: l.assessmentRegistrationId || formData.assessmentRegistrationId || undefined
+      })),
       createdBy: editingInvoice?.createdBy,
       createdAt: editingInvoice?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -1828,8 +2121,9 @@ const brandColor = organization?.primaryColor || '#059669';
       alert(invoiceRequiredFieldMessage || 'Required invoice fields are missing.');
       return;
     }
-    if (!formData.sponsorId && !formData.studentId) {
-      alert('Please select a customer or student.');
+    const trimmedOtherCustomerName = String(formData.otherCustomerName || '').trim();
+    if (!formData.sponsorId && !formData.studentId && !trimmedOtherCustomerName) {
+      alert('Please select a customer, student, or enter an Other bill-to name.');
       return;
     }
     if (formData.lines.length === 0) {
@@ -1858,6 +2152,7 @@ const brandColor = organization?.primaryColor || '#059669';
       siNo: isNonInvoicePayment ? String(formData.siNo || '').trim() || undefined : undefined,
       sponsorId: formData.sponsorId || undefined,
       studentId: formData.studentId || undefined,
+      otherCustomerName: trimmedOtherCustomerName || undefined,
       enrollmentId: formData.enrollmentId || undefined,
       assessmentRegistrationId: formData.assessmentRegistrationId || undefined,
       batchId: formData.batchId || undefined,
@@ -1876,11 +2171,16 @@ const brandColor = organization?.primaryColor || '#059669';
       reference: formData.reference || undefined,
       terms: formData.terms || undefined,
       notes: String(formData.notes || '').trim() || undefined,
-      lines: invoiceLines.map(l => ({ ...l, invoiceId: editingInvoice?.id || '', assessmentRegistrationId: l.assessmentRegistrationId || formData.assessmentRegistrationId || undefined })),
+      lines: invoiceLines.map(l => ({
+        ...l,
+        invoiceId: editingInvoice?.id || '',
+        courseFeeId: l.courseFeeId || undefined,
+        glAccountId: l.glAccountId || undefined,
+        assessmentRegistrationId: l.assessmentRegistrationId || formData.assessmentRegistrationId || undefined
+      })),
       createdBy: editingInvoice?.createdBy,
       createdAt: editingInvoice?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      postedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString()
     };
 
     setIsSubmittingInvoice(true);
@@ -1930,8 +2230,8 @@ const brandColor = organization?.primaryColor || '#059669';
       });
     }
     const result = onPostInvoice
-      ? await onPostInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() })
-      : await onUpdateInvoice({ ...invoice, status: 'OPEN', postedAt: new Date().toISOString() });
+      ? await onPostInvoice({ ...invoice, status: 'OPEN' })
+      : await onUpdateInvoice({ ...invoice, status: 'OPEN' });
     if (result === false) return;
     setRefreshKey(key => key + 1);
   };
@@ -2053,7 +2353,7 @@ const brandColor = organization?.primaryColor || '#059669';
       filters: invoiceFilters,
       search: debouncedSearchTerm.trim()
         ? {
-          columns: ['invoice_no', 'reference', 'gl_entry_number', 'notes'],
+          columns: ['invoice_no', 'reference', 'gl_entry_number', 'notes', 'other_customer_name'],
           term: debouncedSearchTerm
         }
         : undefined,
@@ -2129,6 +2429,8 @@ const brandColor = organization?.primaryColor || '#059669';
         } else if (inv.studentId) {
           const st = students.find(s => s.id === inv.studentId);
           payerName = st ? `${st.lastName}, ${st.firstName}` : '';
+        } else if (inv.otherCustomerName) {
+          payerName = inv.otherCustomerName;
         }
         matchesPayer = payerName.toLowerCase().includes(payerSearchTerm.trim().toLowerCase());
       } else {
@@ -2257,7 +2559,7 @@ const brandColor = organization?.primaryColor || '#059669';
     const badges: Record<InvoiceStatus, { bg: string; text: string; label: string; title?: string }> = {
       'DRAFT': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'ON HOLD', title: 'Invoice saved as draft, pending approval' },
       'ON_HOLD': { bg: 'bg-blue-100', text: 'text-blue-700', label: 'ON HOLD', title: 'Invoice saved as draft, pending approval' },
-      'OPEN': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'OPEN' },
+      'OPEN': { bg: 'bg-emerald-100', text: 'text-emerald-700', label: isNonInvoicePayment ? 'POSTED' : 'OPEN' },
       'CLOSED': { bg: 'bg-slate-100', text: 'text-slate-700', label: 'CLOSED' },
       'VOIDED': { bg: 'bg-rose-100', text: 'text-rose-700', label: 'VOIDED' }
     };
@@ -2272,9 +2574,10 @@ const brandColor = organization?.primaryColor || '#059669';
     const s = students.find(st => st.id === id);
     return s ? `${s.lastName}, ${s.firstName}` : '-';
   }
-  function getInvoicePayerName(invoice: Pick<Invoice, 'documentType' | 'sponsorId' | 'studentId'>) {
+  function getInvoicePayerName(invoice: Pick<Invoice, 'documentType' | 'sponsorId' | 'studentId' | 'otherCustomerName'>) {
     if (invoice.sponsorId) return getSponsorName(invoice.sponsorId);
     if (invoice.studentId) return getStudentName(invoice.studentId);
+    if (String(invoice.otherCustomerName || '').trim()) return String(invoice.otherCustomerName).trim();
     return '-';
   }
   const getBatchCode = (id?: string) => batches.find(b => b.id === id)?.batchCode || '-';
@@ -2391,7 +2694,7 @@ const brandColor = organization?.primaryColor || '#059669';
 
   // ── Export helpers ──────────────────────────────────────────────
   const getDisplayStatusLabel = (s: InvoiceStatus) => {
-    const map: Record<InvoiceStatus, string> = { DRAFT: 'ON HOLD', ON_HOLD: 'ON HOLD', OPEN: 'OPEN', CLOSED: 'CLOSED', VOIDED: 'VOIDED' };
+    const map: Record<InvoiceStatus, string> = { DRAFT: 'ON HOLD', ON_HOLD: 'ON HOLD', OPEN: isNonInvoicePayment ? 'POSTED' : 'OPEN', CLOSED: 'CLOSED', VOIDED: 'VOIDED' };
     return map[s] || s;
   };
 
@@ -4081,7 +4384,7 @@ const brandColor = organization?.primaryColor || '#059669';
               <div className="bg-brand/5 rounded-lg p-4 border border-brand/20">
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start">
 
-                  {!isNonInvoicePayment && <div className="min-w-0 lg:col-span-4">
+                  {!isNonInvoicePayment && <div className="min-w-0 lg:col-span-6">
                     <label className="text-xs font-medium text-gray-500">Walk-in Assessment Candidate</label>
                     <select
                       value={formData.assessmentRegistrationId}
@@ -4104,7 +4407,7 @@ const brandColor = organization?.primaryColor || '#059669';
                   </div>}
 
                   {/* batch in center */}
-                  {!isNonInvoicePayment && <div className="min-w-0 lg:col-span-4">
+                  {!isNonInvoicePayment && <div className="min-w-0 lg:col-span-6">
                     <label className="text-xs font-medium text-gray-500">Select Batch</label>
                     <select
                       aria-label="Select Batch"
@@ -4164,8 +4467,8 @@ const brandColor = organization?.primaryColor || '#059669';
                       </div>
                     )}
                   </div>}
-                  {/* sponsor and student side by side */}
-                  <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isNonInvoicePayment ? 'lg:col-span-8' : 'lg:col-span-4'}`}>
+                  {/* sponsor, student, and other side by side */}
+                  <div className={`grid grid-cols-1 gap-4 sm:grid-cols-3 ${isNonInvoicePayment ? 'lg:col-span-12' : 'lg:col-span-6'}`}>
                     <div className="min-w-0">
                       <label className="text-xs font-medium text-gray-500">{isNonInvoicePayment || !formData.batchId ? 'Customer / Sponsor' : 'Sponsor'}</label>
                       <select
@@ -4177,10 +4480,10 @@ const brandColor = organization?.primaryColor || '#059669';
                           if (formData.batchId) {
                             handleBatchChange(formData.batchId, newSponsorId, '');
                           } else if (newSponsorId) {
-                            setFormData(prev => ({ ...prev, studentId: '', assessmentRegistrationId: prev.assessmentRegistrationId || '' }));
+                            setFormData(prev => ({ ...prev, studentId: '', otherCustomerName: '', assessmentRegistrationId: prev.assessmentRegistrationId || '' }));
                           }
                         }}
-                        disabled={(!!formData.studentId && !formData.assessmentRegistrationId) || isReadOnly}
+                        disabled={((!!formData.studentId || !!formData.otherCustomerName.trim()) && !formData.assessmentRegistrationId) || isReadOnly}
                         className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-200 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="">Select Sponsor</option>
@@ -4192,7 +4495,7 @@ const brandColor = organization?.primaryColor || '#059669';
                     <div className="min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-xs font-medium text-gray-500">Student</label>
-                        {!isReadOnly && !formData.sponsorId && (
+                        {!isReadOnly && !formData.sponsorId && !formData.otherCustomerName.trim() && (
                           <button
                             type="button"
                             onClick={() => handleOpenQuickStudent()}
@@ -4206,15 +4509,15 @@ const brandColor = organization?.primaryColor || '#059669';
                       <SearchableStudentSelect
                         students={formData.batchId ? batchStudentsForBilling : students.filter(student => !student.isDeleted)}
                         value={formData.studentId}
-                        onQuickAdd={!isReadOnly && !formData.sponsorId ? handleOpenQuickStudent : undefined}
+                        onQuickAdd={!isReadOnly && !formData.sponsorId && !formData.otherCustomerName.trim() ? handleOpenQuickStudent : undefined}
                         onChange={studentId => {
                           if (formData.batchId) {
                             handleBatchChange(formData.batchId, '', studentId);
                           } else {
-                            setFormData(prev => ({ ...prev, studentId, sponsorId: '', assessmentRegistrationId: prev.assessmentRegistrationId && studentId ? prev.assessmentRegistrationId : '' }));
+                            setFormData(prev => ({ ...prev, studentId, sponsorId: '', otherCustomerName: '', assessmentRegistrationId: prev.assessmentRegistrationId && studentId ? prev.assessmentRegistrationId : '' }));
                           }
                         }}
-                        disabled={(!!formData.sponsorId && !formData.assessmentRegistrationId) || isReadOnly}
+                        disabled={((!!formData.sponsorId || !!formData.otherCustomerName.trim()) && !formData.assessmentRegistrationId) || isReadOnly}
                       />
                       {formData.studentId && isProvisionalStudent(students.find(s => s.id === formData.studentId)) && (
                         <div className="mt-1 flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
@@ -4223,6 +4526,29 @@ const brandColor = organization?.primaryColor || '#059669';
                         </div>
                       )}
                       <div style={{ display: 'none' }}
+                      />
+                    </div>
+                    <div className="min-w-0">
+                      <label htmlFor="invoice-other-customer-name" className="text-xs font-medium text-gray-500">Other (e.g., Rental / Walk-in)</label>
+                      <input
+                        id="invoice-other-customer-name"
+                        aria-label="Other Customer Name"
+                        type="text"
+                        value={formData.otherCustomerName}
+                        onChange={e => {
+                          const value = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            otherCustomerName: value,
+                            sponsorId: value.trim() ? '' : prev.sponsorId,
+                            studentId: value.trim() ? '' : prev.studentId,
+                            batchId: value.trim() ? '' : prev.batchId,
+                            assessmentRegistrationId: value.trim() ? '' : prev.assessmentRegistrationId
+                          }));
+                        }}
+                        placeholder="Enter name (not linked to sponsor/student)"
+                        disabled={!!formData.sponsorId || !!formData.studentId || !!formData.batchId || !!formData.assessmentRegistrationId || isReadOnly}
+                        className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-orange-200 bg-white disabled:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -4465,6 +4791,7 @@ const brandColor = organization?.primaryColor || '#059669';
                             lineType: { key: 'lineType', label: 'Type', align: 'text-left', width: 110 },
                             classificationCode: { key: 'classificationCode', label: 'Class', align: 'text-left', width: 120 },
                             courseFeeId: { key: 'courseFeeId', label: 'Course Fee', align: 'text-left', width: 120 },
+                            glAccountId: { key: 'glAccountId', label: 'Account', align: 'text-left', width: 170 },
                             description: { key: 'description', label: 'Description', align: 'text-left', width: 180 },
                             taxCategoryId: { key: 'taxCategoryId', label: 'Tax Category *', align: 'text-right', width: 120 },
                             quantity: { key: 'quantity', label: 'Qty', align: 'text-right', width: 80 },
@@ -4549,7 +4876,7 @@ const brandColor = organization?.primaryColor || '#059669';
                     <tbody>
                       {formData.lines.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="px-3 py-8 text-center text-gray-400">
+                          <td colSpan={lineColOrder.length} className="px-3 py-8 text-center text-gray-400">
                             No line items. Click "Add Line" to add items.
                           </td>
                         </tr>
@@ -4563,6 +4890,7 @@ const brandColor = organization?.primaryColor || '#059669';
                             lineType: { key: 'lineType' },
                             classificationCode: { key: 'classificationCode' },
                             courseFeeId: { key: 'courseFeeId' },
+                            glAccountId: { key: 'glAccountId' },
                             description: { key: 'description' },
                             taxCategoryId: { key: 'taxCategoryId' },
                             quantity: { key: 'quantity' },
@@ -4658,6 +4986,17 @@ const brandColor = organization?.primaryColor || '#059669';
                                           ))}
                                         </select>
                                       )}
+                                    </td>;
+                                  case 'glAccountId':
+                                    return <td key={colKey} className="px-3 py-2" style={lineColWidths[colKey] ? { width: lineColWidths[colKey], minWidth: lineColWidths[colKey] } : undefined}>
+                                      <SearchableLineAccountSelect
+                                        accounts={accounts}
+                                        value={line.glAccountId || ''}
+                                        onChange={accountId => handleUpdateLine(idx, 'glAccountId', accountId || undefined)}
+                                        disabled={isReadOnly}
+                                        ariaLabel={`Account line ${idx + 1}`}
+                                        listId={`non-invoice-account-${line.id || idx}`}
+                                      />
                                     </td>;
                                   case 'description':
                                     const linkedCourseFee = line.courseFeeId

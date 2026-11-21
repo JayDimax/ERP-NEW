@@ -32,10 +32,10 @@ export class SupabaseDataService implements IDataService {
       users: 'id,org_id,name,email,last_name,profile_photo,contact_number,address,password_hash,salt,role,last_login_at,is_active,failed_login_attempts,locked_until,created_at,updated_at,auth_uid,trainer_id,student_id',
       students: 'id,org_id,uli,last_name,first_name,middle_name,extension,sex,date_of_birth,email,contact_number,street,barangay,city,province,guardian,location_id,sponsor_id,documents,created_at,updated_at,profile_photo,mailing_region,tesda_employment_status,tesda_employment_type,tesda_learner_classifications,tesda_other_classification,tesda_disability_types,tesda_disability_causes,tesda_course_qualification,tesda_scholarship_package,tesda_privacy_consent',
       batches: 'id,org_id,qualification_id,trainer_id,sponsor_id,location_id,batch_code,name,year,start_date,end_date,status,max_students,current_students,student_ids,created_at,updated_at,billable_student_limit',
-      invoices: 'id,org_id,invoice_no,document_type,payment_method,si_no,sponsor_id,student_id,enrollment_id,batch_id,invoice_date,due_date,status,subtotal,vat_amount,grand_total,total_ewt_amount,net_amount_due,amount_paid,balance_due,ewt_rate,is_subject_to_ewt,reference,terms,notes,journal_entry_id,posted_by,posted_at,voided_by,voided_at,void_reason,is_deleted,deleted_at,deleted_by,created_at,created_by,updated_at,updated_by,vat_pricing,vat_rate,gl_entry_number,assessment_registration_id',
+      invoices: 'id,org_id,invoice_no,document_type,payment_method,si_no,sponsor_id,student_id,other_customer_name,enrollment_id,batch_id,invoice_date,due_date,status,subtotal,vat_amount,grand_total,total_ewt_amount,net_amount_due,amount_paid,balance_due,ewt_rate,is_subject_to_ewt,reference,terms,notes,journal_entry_id,posted_by,posted_at,voided_by,voided_at,void_reason,is_deleted,deleted_at,deleted_by,created_at,created_by,updated_at,updated_by,vat_pricing,vat_rate,gl_entry_number,assessment_registration_id',
       invoice_lines: 'id,invoice_id,line_number,description,course_fee_id,enrollment_id,quantity,unit_price,amount,tax_category_id,vat_amount,gl_account_id,is_deleted,deleted_at,deleted_by,created_at,updated_at,net_amount,gross_amount,org_id,classification_code,assessment_registration_id,line_type',
-      payments: 'id,org_id,payment_no,sponsor_id,student_id,payment_date,status,payment_method,ref_no,bank_account_id,check_number,check_date,amount_received,ewt_amount_certified,total_applied,customer_deposit_balance,journal_entry_id,voided_at,voided_by,void_reason,posted_at,posted_by,notes,created_at,created_by,updated_at,updated_by,is_deleted,deleted_at,deleted_by',
-      payment_applications: 'id,payment_id,invoice_id,amount_applied,is_reversed,reversal_reason,reversed_at,reversed_by,created_at,created_by,updated_at',
+      payments: 'id,org_id,payment_no,sponsor_id,student_id,other_customer_name,payment_date,status,payment_method,ref_no,bank_account_id,check_number,check_date,amount_received,ewt_amount_certified,total_applied,customer_deposit_balance,journal_entry_id,voided_at,voided_by,void_reason,posted_at,posted_by,notes,created_at,created_by,updated_at,updated_by,is_deleted,deleted_at,deleted_by',
+      payment_applications: '*',
       journal_entries: 'id,org_id,period_id,date,description,reference,status,created_by,source_type,created_at,updated_at,approved_by,approved_at,gl_entry_number,review_comments,updated_by,source_ref,deposit_id,reversed_by,reversed_at,reversal_reason,original_entry_id',
       journal_lines: 'id,journal_entry_id,account_id,debit,credit,memo,contact_id,contact_type,batch_id,item_id,asset_id,is_cleared,created_at,description,classification_code,tax_category_id',
       audit_logs: 'id,org_id,user_id,action,entity_type,entity_id,details,ip_address,user_agent,created_at',
@@ -914,7 +914,7 @@ export class SupabaseDataService implements IDataService {
         'created_at', 'updated_at', 'is_deleted', 'deleted_at', 'deleted_by'
       ],
       invoices: [
-        'id', 'org_id', 'invoice_no', 'document_type', 'payment_method', 'si_no', 'sponsor_id', 'student_id', 'enrollment_id', 'assessment_registration_id', 'batch_id',
+        'id', 'org_id', 'invoice_no', 'document_type', 'payment_method', 'si_no', 'sponsor_id', 'student_id', 'other_customer_name', 'enrollment_id', 'assessment_registration_id', 'batch_id',
         'invoice_date', 'due_date', 'status', 'subtotal', 'vat_amount', 'grand_total',
         'total_ewt_amount', 'net_amount_due', 'amount_paid', 'balance_due',
         'ewt_rate', 'is_subject_to_ewt', 'reference', 'terms', 'notes', 'journal_entry_id',
@@ -942,7 +942,7 @@ export class SupabaseDataService implements IDataService {
         'id', 'org_id', 'code', 'description', 'tax_type', 'rate', 'is_inclusive', 'output_account_id', 'created_at', 'updated_at'
       ],
       payments: [
-        'id', 'org_id', 'payment_no', 'cr_no', 'sponsor_id', 'student_id',
+        'id', 'org_id', 'payment_no', 'cr_no', 'sponsor_id', 'student_id', 'other_customer_name',
         'payment_date', 'status', 'payment_method', 'ref_no', 'bank_account_id',
         'check_number', 'check_date', 'source_invoice_id', 'amount_received', 'ewt_amount_certified',
         'total_applied', 'customer_deposit_balance', 'journal_entry_id',
@@ -5532,8 +5532,8 @@ export class SupabaseDataService implements IDataService {
         snakeEntry
       );
 
-      // Convert empty strings or non-UUID values to null for UUID columns
-      if (payload.period_id === '' || (payload.period_id && !this.isUuid(payload.period_id))) payload.period_id = null;
+      // Convert empty strings or non-UUID values to null for UUID columns (period_id is varchar NOT NULL)
+      if (!payload.period_id) payload.period_id = 'CURRENT';
       if (payload.source_ref === '' || (payload.source_ref && !this.isUuid(payload.source_ref))) payload.source_ref = null;
       if (payload.created_by === '' || (payload.created_by && !this.isUuid(payload.created_by))) payload.created_by = null;
       if (payload.approved_by === '' || (payload.approved_by && !this.isUuid(payload.approved_by))) payload.approved_by = null;
@@ -5573,8 +5573,8 @@ export class SupabaseDataService implements IDataService {
         snakeUpdates
       );
 
-      // Convert empty strings or non-UUID values to null for UUID columns
-      if (payload.period_id === '' || (payload.period_id && !this.isUuid(payload.period_id))) payload.period_id = null;
+      // Convert empty strings or non-UUID values to null for UUID columns (period_id is varchar NOT NULL)
+      if (payload.period_id === '') delete payload.period_id;
       if (payload.source_ref === '' || (payload.source_ref && !this.isUuid(payload.source_ref))) payload.source_ref = null;
       if (payload.created_by === '' || (payload.created_by && !this.isUuid(payload.created_by))) payload.created_by = null;
       if (payload.approved_by === '' || (payload.approved_by && !this.isUuid(payload.approved_by))) payload.approved_by = null;
@@ -6674,6 +6674,9 @@ export class SupabaseDataService implements IDataService {
           filteredUpdates[field] = null;
         }
       });
+      if (Object.prototype.hasOwnProperty.call(snakeCaseUpdates, 'other_customer_name') && (snakeCaseUpdates.other_customer_name === undefined || String(snakeCaseUpdates.other_customer_name).trim() === '')) {
+        filteredUpdates.other_customer_name = null;
+      }
     }
 
     let savedLines: any[] | undefined;
@@ -6808,6 +6811,11 @@ export class SupabaseDataService implements IDataService {
     await this.assertInvoiceLinesMutable(line.invoiceId || line.invoice_id);
     const snakeCaseLine = this.camelToSnake(line);
     const filteredLine = this.filterToTableSchema('invoice_lines', snakeCaseLine, true);
+    ['course_fee_id', 'gl_account_id', 'tax_category_id', 'assessment_registration_id'].forEach(field => {
+      if (filteredLine[field] === '') {
+        filteredLine[field] = null;
+      }
+    });
     return this.insertToSupabaseRaw('invoice_lines', filteredLine);
   }
 
@@ -6824,6 +6832,11 @@ export class SupabaseDataService implements IDataService {
     await this.assertInvoiceLinesMutable(existingLine?.invoice_id || existingLine?.invoiceId || (updates as any).invoiceId || (updates as any).invoice_id);
     const snakeCaseUpdates = this.camelToSnake(updates);
     const filteredUpdates = this.filterToTableSchema('invoice_lines', snakeCaseUpdates);
+    ['course_fee_id', 'gl_account_id', 'tax_category_id', 'assessment_registration_id'].forEach(field => {
+      if (filteredUpdates[field] === '') {
+        filteredUpdates[field] = null;
+      }
+    });
     return this.updateInSupabaseRaw('invoice_lines', id, filteredUpdates);
   }
 

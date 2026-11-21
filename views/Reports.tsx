@@ -56,7 +56,9 @@ const Reports: React.FC<ReportsProps> = ({ accounts: initialAccounts, entries: i
         service.getAccountsByOrg(orgId),
         service.getJournalEntriesByOrg(orgId)
       ]);
-      const postedEntries = allEntries.filter(entry => entry.status === 'POSTED' && !entry.isDeleted);
+      const postedEntries = allEntries.filter(
+        entry => (entry.status === 'POSTED' || entry.status === 'REVERSED') && !entry.isDeleted
+      );
       const lineGroups: JournalLine[][] = [];
 
       for (let index = 0; index < postedEntries.length; index += 25) {

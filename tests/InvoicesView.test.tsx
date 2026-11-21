@@ -2,7 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect } from 'vitest';
 import InvoicesView from '../views/InvoicesView';
-import { Invoice } from '../types';
+import { AccountClass, Invoice } from '../types';
 import { SupabaseDataService } from '../services/SupabaseDataService';
 
 
@@ -360,6 +360,12 @@ describe('InvoicesView tax category dropdown', () => {
 
     const courseFeeCombobox = screen.getByRole('combobox', { name: /Search course fee by name or code/i });
     fireEvent.focus(courseFeeCombobox);
+
+    // Dropdown renders in a fixed body portal so overflow-hidden table containers cannot clip or cover it
+    const listbox = screen.getByRole('listbox');
+    expect(listbox.parentElement).toBe(document.body);
+    expect(listbox.style.position).toBe('fixed');
+    expect(Number(listbox.style.zIndex)).toBeGreaterThanOrEqual(9999);
 
     // Lists all active course fees across qualifications and funding types with feeName first, excluding inactive ones
     expect(screen.getByRole('option', { name: /BREAD AND PASTRY NCII ASSESSMENT FEE - BPP-002/i })).toBeInTheDocument();
@@ -894,6 +900,149 @@ describe('InvoicesView tax category dropdown', () => {
     // Table refreshes after persistence and displays the newly created draft invoice immediately
     await waitFor(() => expect(fetchPageSpy).toHaveBeenCalledTimes(initialFetchCount + 1));
     expect(await screen.findByText(createdInvoice.invoiceNo)).toBeInTheDocument();
+  });
+
+  it('approves an ON HOLD non-invoice payment without premature postedAt and displays POSTED badge when approved', async () => {
+    const onUpdateInvoice = vi.fn(async () => true);
+    const draftNonInvoice: Invoice = {
+      id: 'nip-draft-1',
+      orgId: 'org1',
+      invoiceNo: 'CINV-2026-00001',
+      documentType: 'NON_INVOICE_PAYMENT',
+      paymentMethod: 'CASH',
+      sponsorId: 'cust-1',
+      invoiceDate: '2026-03-01',
+      dueDate: '2026-03-01',
+      status: 'DRAFT',
+      vatPricing: 'INCLUSIVE',
+      vatRate: 0.12,
+      subtotal: 1000,
+      vatAmount: 0,
+      grandTotal: 1000,
+      totalEwtAmount: 0,
+      netAmountDue: 1000,
+      amountPaid: 1000,
+      balanceDue: 0,
+      notes: 'Walk-in cash payment',
+      lines: [
+        {
+          id: 'line-1',
+          orgId: 'org1',
+          invoiceId: 'nip-draft-1',
+          lineNumber: 1,
+          lineType: 'MANUAL',
+          description: 'Miscellaneous fee',
+          quantity: 1,
+          unitPrice: 1000,
+          netAmount: 1000,
+          vatAmount: 0,
+          grossAmount: 1000,
+          amount: 1000,
+          taxCategoryId: 'tc2',
+          createdAt: ''
+        }
+      ],
+      createdAt: '2026-03-01T00:00:00.000Z'
+    };
+
+    const postedNonInvoice: Invoice = {
+      ...draftNonInvoice,
+      id: 'nip-posted-1',
+      invoiceNo: 'CINV-2026-00002',
+      status: 'OPEN',
+      journalEntryId: 'je-1',
+      glEntryNumber: 'GL-2026-0001',
+      postedAt: '2026-03-01T01:00:00.000Z'
+    };
+
+    vi.spyOn(SupabaseDataService.prototype, 'fetchPage').mockResolvedValue({
+      rows: [draftNonInvoice, postedNonInvoice],
+      total: 2,
+      page: 1,
+      pageSize: 25,
+      totalPages: 1
+    });
+
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="NON_INVOICE_PAYMENT"
+        invoices={[draftNonInvoice, postedNonInvoice]}
+        onUpdateInvoice={onUpdateInvoice}
+        sponsors={[
+          { id: 'cust-1', orgId: 'org1', name: 'Acme Training Corp', customerType: 'CORPORATE', createdAt: '' }
+        ]}
+      />
+    );
+
+    // Approved non-invoice payment displays POSTED badge instead of OPEN
+    expect(await screen.findByText('POSTED')).toBeInTheDocument();
+
+    // Open the ON HOLD draft non-invoice payment and click Approve
+    fireEvent.click(await screen.findByText('CINV-2026-00001'));
+    const approveBtn = await screen.findByTitle('Approve');
+    fireEvent.click(approveBtn);
+
+    await waitFor(() => expect(onUpdateInvoice).toHaveBeenCalledTimes(1));
+    const approvedPayload = onUpdateInvoice.mock.calls[0][0] as Invoice;
+    expect(approvedPayload.status).toBe('OPEN');
+    expect(approvedPayload.documentType).toBe('NON_INVOICE_PAYMENT');
+    expect(approvedPayload.postedAt).toBeUndefined();
+  });
+
+  it('allows selecting a GL account and saving a manual non-invoice payment line with null/empty course fee', async () => {
+    const onAddInvoice = vi.fn(async () => true);
+
+    render(
+      <InvoicesView
+        {...baseProps}
+        documentMode="NON_INVOICE_PAYMENT"
+        onAddInvoice={onAddInvoice}
+        sponsors={[
+          { id: 'cust-1', orgId: 'org1', name: 'Walk-in Client', customerType: 'CORPORATE', createdAt: '' }
+        ]}
+        accounts={[
+          { id: 'acc-cash', orgId: 'org1', code: '1101', name: 'Cash on Hand', class: AccountClass.ASSET, isHeader: false, isActive: true, balance: 0, normalBalance: 'DEBIT', createdAt: '' },
+          { id: 'acc-misc', orgId: 'org1', code: '4900', name: 'Miscellaneous Income', class: AccountClass.REVENUE, isHeader: false, isActive: true, balance: 0, normalBalance: 'CREDIT', createdAt: '' }
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText(/New Non-Invoice Payment/i));
+    fireEvent.click(screen.getByRole('button', { name: /Add Line/i }));
+
+    // Account column header and searchable account input are shown
+    expect(screen.getByText('Account')).toBeInTheDocument();
+    const accountCombobox = screen.getByRole('combobox', { name: /Account line 1/i });
+    fireEvent.focus(accountCombobox);
+    fireEvent.click(screen.getByRole('option', { name: /4900 - Miscellaneous Income/i }));
+    expect(accountCombobox).toHaveValue('4900 - Miscellaneous Income');
+
+    // Fill manual line fields without selecting any course fee
+    fireEvent.change(screen.getByPlaceholderText('Description'), { target: { value: 'ID Replacement Fee' } });
+    const taxCategory = screen.getByRole('combobox', { name: /Tax Category line 1/i });
+    await waitForTaxOption(taxCategory, 'tc2');
+    fireEvent.change(taxCategory, { target: { value: 'tc2' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /Unit Price line 1/i }), { target: { value: '350' } });
+
+    // GL Journal Entry Preview reflects the selected Miscellaneous Income account
+    expect(screen.getByText(/4900 - Miscellaneous Income/i)).toBeInTheDocument();
+
+    // Save proceeds cleanly even though courseFeeId is null/undefined
+    fireEvent.change(screen.getByDisplayValue('Select Sponsor'), { target: { value: 'cust-1' } });
+    fireEvent.change(screen.getByPlaceholderText('Invoice notes or memo...'), { target: { value: 'Miscellaneous ID fee' } });
+    fireEvent.click(screen.getByTitle('Save as Draft'));
+
+    await waitFor(() => expect(onAddInvoice).toHaveBeenCalledTimes(1));
+    const savedInvoice = onAddInvoice.mock.calls[0][0] as Invoice;
+    expect(savedInvoice.documentType).toBe('NON_INVOICE_PAYMENT');
+    expect(savedInvoice.lines[0]).toMatchObject({
+      lineType: 'MANUAL',
+      courseFeeId: undefined,
+      glAccountId: 'acc-misc',
+      description: 'ID Replacement Fee',
+      amount: 350
+    });
   });
 
 });

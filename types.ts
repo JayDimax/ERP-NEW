@@ -997,6 +997,7 @@ export interface Invoice extends BaseEntity {
   siNo?: string;
   sponsorId?: string;          // FK to Sponsor (primary billing party)
   studentId?: string;          // FK to Student (if individual billing)
+  otherCustomerName?: string;  // Free-text customer name when billing "Other" (e.g., rental, walk-in non-student)
   enrollmentId?: string;       // FK to Enrollment (optional link)
   assessmentRegistrationId?: string; // FK to AssessmentRegistration (assessment-only billing)
   batchId?: string;            // FK to Batch (optional link)
@@ -1069,6 +1070,7 @@ export interface Payment extends BaseEntity {
   crNo?: string;                // Collection Receipt number
   sponsorId?: string;           // FK to Sponsor (primary payer)
   studentId?: string;           // FK to Student (if individual payment)
+  otherCustomerName?: string;   // Free-text payer name when collecting from "Other" customer
   paymentDate: string;          // Date payment received
   status: PaymentStatus;        // DRAFT, POSTED, VOIDED
   paymentMethod: PaymentMethod; // CASH, CHECK, BANK_TRANSFER, etc.

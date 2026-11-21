@@ -306,8 +306,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-  document.documentElement.setAttribute("data-theme", selectedTheme);
-}, [selectedTheme]);
+    document.documentElement.setAttribute("data-theme", selectedTheme);
+  }, [selectedTheme]);
   // Email verification handler
   const handleVerifyEmailToken = async (token: string) => {
     const { emailVerificationService } = await import('./services/EmailVerificationService');
@@ -749,790 +749,790 @@ export default function App() {
     try {
       setIsLoading(true);
       console.log("📊 App: Starting data load...");
-        console.log("🔧 Config:", { useMockData: config.useMockData, supabaseConfigured: !!(config.supabase?.url && config.supabase?.anonKey) });
+      console.log("🔧 Config:", { useMockData: config.useMockData, supabaseConfigured: !!(config.supabase?.url && config.supabase?.anonKey) });
 
-        const service = DataServiceFactory.getService();
-        console.log(`📦 Using service: ${config.useMockData ? 'MOCK' : 'SUPABASE'} `);
+      const service = DataServiceFactory.getService();
+      console.log(`📦 Using service: ${config.useMockData ? 'MOCK' : 'SUPABASE'} `);
 
-        const data = await service.getInitialData();
-        console.log("✅ Data loaded:", {
-          organizations: data.organizations.length,
-          users: data.users.length,
-          students: data.students.length,
-          accounts: data.accounts.length
-        });
+      const data = await service.getInitialData();
+      console.log("✅ Data loaded:", {
+        organizations: data.organizations.length,
+        users: data.users.length,
+        students: data.students.length,
+        accounts: data.accounts.length
+      });
 
-        setOrganizations(data.organizations.map(normalizeOrganization));
-        setUsers(data.users);
-        setStudents(data.students);
-        setQualifications(data.qualifications);
-        setTrainers(data.trainers);
-        setBatches(data.batches);
-        setSponsors(data.sponsors);
-        setItems(data.items);
-        setVendors(data.vendors);
-        setLocations(data.locations);
-        setSchedules(data.schedules);
-        setEmployees(data.employees);
-        setBankAccounts(data.bankAccounts);
-        setBankReconciliations(data.bankReconciliations);
-        setRecurringJournalEntries(data.recurringJournalEntries || []);
-        setAccounts(data.accounts);
-        // backfill glEntryNumber for any rows that came from the server
-        // before the column existed.  If reference already contains a GL
-        // formatted string we'll use that so the generator can see it later.
-        let normalizedEntries = (data.journalEntries || []).map((e: any) => {
-          if (!e.glEntryNumber) {
-            const ref = (e.reference || '').trim();
-            if (/^GL[\s-]*(\d+)$/i.test(ref)) {
-              // previously backfilled pattern entries
-              return { ...e, glEntryNumber: ref };
-            }
-            // if there's some other reference value (e.g. GUID) treat as missing
-            // so we will allocate a proper sequential number below
+      setOrganizations(data.organizations.map(normalizeOrganization));
+      setUsers(data.users);
+      setStudents(data.students);
+      setQualifications(data.qualifications);
+      setTrainers(data.trainers);
+      setBatches(data.batches);
+      setSponsors(data.sponsors);
+      setItems(data.items);
+      setVendors(data.vendors);
+      setLocations(data.locations);
+      setSchedules(data.schedules);
+      setEmployees(data.employees);
+      setBankAccounts(data.bankAccounts);
+      setBankReconciliations(data.bankReconciliations);
+      setRecurringJournalEntries(data.recurringJournalEntries || []);
+      setAccounts(data.accounts);
+      // backfill glEntryNumber for any rows that came from the server
+      // before the column existed.  If reference already contains a GL
+      // formatted string we'll use that so the generator can see it later.
+      let normalizedEntries = (data.journalEntries || []).map((e: any) => {
+        if (!e.glEntryNumber) {
+          const ref = (e.reference || '').trim();
+          if (/^GL[\s-]*(\d+)$/i.test(ref)) {
+            // previously backfilled pattern entries
+            return { ...e, glEntryNumber: ref };
           }
-          const next = { ...e } as any;
-          // Normalize legacy DB statuses/types to UI expectations
-          if (next.status === 'DRAFT') next.status = 'ON_HOLD';
-          if (next.sourceType === 'MANUAL' && /^JV/i.test(String(next.reference || '').trim())) {
-            next.sourceType = 'JOURNAL';
-          }
-          return next;
-        });
+          // if there's some other reference value (e.g. GUID) treat as missing
+          // so we will allocate a proper sequential number below
+        }
+        const next = { ...e } as any;
+        // Normalize legacy DB statuses/types to UI expectations
+        if (next.status === 'DRAFT') next.status = 'ON_HOLD';
+        if (next.sourceType === 'MANUAL' && /^JV/i.test(String(next.reference || '').trim())) {
+          next.sourceType = 'JOURNAL';
+        }
+        return next;
+      });
 
-        // Determine target organization context for initial GL sequence sync
-        const activeUser = explicitUser !== undefined ? explicitUser : (currentUserRef.current || authService.getSession()?.user);
-        let targetOrgId = activeUser?.orgId || currentOrgIdRef.current;
-        if (activeUser?.role === 'SYSTEM_ADMIN') {
-          if (currentOrgIdRef.current && data.organizations.some(o => o.id === currentOrgIdRef.current && !o.isDeleted)) {
-            targetOrgId = currentOrgIdRef.current;
-          } else if (activeUser.orgId && data.organizations.some(o => o.id === activeUser.orgId && !o.isDeleted)) {
-            targetOrgId = activeUser.orgId;
-          } else if (data.organizations.length > 0) {
-            targetOrgId = data.organizations[0].id;
-          }
-        } else if (data.organizations.length > 0 && (!targetOrgId || !data.organizations.some(o => o.id === targetOrgId && !o.isDeleted))) {
+      // Determine target organization context for initial GL sequence sync
+      const activeUser = explicitUser !== undefined ? explicitUser : (currentUserRef.current || authService.getSession()?.user);
+      let targetOrgId = activeUser?.orgId || currentOrgIdRef.current;
+      if (activeUser?.role === 'SYSTEM_ADMIN') {
+        if (currentOrgIdRef.current && data.organizations.some(o => o.id === currentOrgIdRef.current && !o.isDeleted)) {
+          targetOrgId = currentOrgIdRef.current;
+        } else if (activeUser.orgId && data.organizations.some(o => o.id === activeUser.orgId && !o.isDeleted)) {
+          targetOrgId = activeUser.orgId;
+        } else if (data.organizations.length > 0) {
           targetOrgId = data.organizations[0].id;
         }
+      } else if (data.organizations.length > 0 && (!targetOrgId || !data.organizations.some(o => o.id === targetOrgId && !o.isDeleted))) {
+        targetOrgId = data.organizations[0].id;
+      }
 
-        // Seed the per-org GL sequence from loaded data before backfilling.
-        if (targetOrgId) {
-          syncGlSequenceForOrg(targetOrgId, normalizedEntries);
-          syncInvoiceGlSequenceForOrg(targetOrgId, normalizedEntries);
-        }
+      // Seed the per-org GL sequence from loaded data before backfilling.
+      if (targetOrgId) {
+        syncGlSequenceForOrg(targetOrgId, normalizedEntries);
+        syncInvoiceGlSequenceForOrg(targetOrgId, normalizedEntries);
+      }
 
-        // Assign sequential numbers to any entries that still lack a valid
-        // GL reference (either column missing or reference not matching pattern).
-        const missing = normalizedEntries.filter(e => {
-          const status = String(e.status || '').toUpperCase();
-          const isDraftLike = status === 'DRAFT' || status === 'ON_HOLD' || status === 'REVISION_REQUESTED' || status === 'PENDING' || status === 'PENDING_APPROVAL';
-          return !e.glEntryNumber && !isDraftLike;
-        });
-        if (missing.length > 0) {
-          const updates: Promise<any>[] = [];
-          missing.forEach(e => {
-            const newGl = generateNextGlRef();
-            const isCreditDebitMemoEntry =
-              String(e.sourceType || '').toUpperCase() === 'CREDIT_MEMO' ||
-              String(e.sourceType || '').toUpperCase() === 'DEBIT_MEMO' ||
-              /^(CM|DM|CDM|DBM)-/i.test(String(e.reference || '').trim()) ||
-              String(e.description || '').toUpperCase().includes('CREDIT MEMO') ||
-              String(e.description || '').toUpperCase().includes('DEBIT MEMO');
-            updates.push(
-              dataService.updateJournalEntry(e.id, isCreditDebitMemoEntry ? { glEntryNumber: newGl } : { glEntryNumber: newGl, reference: newGl })
-                .then(updated => {
-                  e.glEntryNumber = updated.glEntryNumber;
-                  e.reference = isCreditDebitMemoEntry ? e.reference : updated.reference;
-                })
-                .catch(err => console.warn('[App] failed to backfill GL for entry', e.id, err))
-            );
-            // also update local copy immediately so UI shows something
-            e.glEntryNumber = newGl;
-            if (!isCreditDebitMemoEntry) e.reference = newGl;
-          });
-          Promise.all(updates)
-            .then(() => console.info('[App] backfilled missing GL numbers'))
-            .catch(err => console.warn('[App] failed to backfill missing GL numbers:', err));
-        }
-
-        setJournalEntries(normalizedEntries);
-        const sourceAccounts = (data.accounts || []) as ChartOfAccount[];
-        const sourceSponsors = (data.sponsors || []) as Sponsor[];
-        const normalizedJournalLines: any[] = (data.journalLines || []).map((line: any) => ({ ...line }));
-
-        // Backfill invoice records with their posted journal entry links so the
-        // invoice screen, journal entry table, and GL reference all stay in sync.
-        const invoiceBackfills = new Map<string, Partial<Invoice>>();
-        const journalDescriptionBackfills = new Map<string, string>();
-        const journalLineBackfills = new Map<string, Partial<JournalLine>>();
-        const postedInvoiceEntries = normalizedEntries.filter((e: any) => {
-          const status = String(e.status || '').toUpperCase();
-          const sourceType = String(e.sourceType || '').toUpperCase();
-          return status === 'POSTED' && sourceType === 'INVOICE';
-        });
-        const resolveEntryGlRef = (entry?: any) => (entry ? (entry.glEntryNumber || entry.reference || '').trim() : '');
-        const queueInvoiceBackfill = (invoiceId: string, updates: Partial<Invoice>) => {
-          const current = invoiceBackfills.get(invoiceId) || {};
-          invoiceBackfills.set(invoiceId, { ...current, ...updates });
-        };
-        const queueJournalDescriptionBackfill = (journalEntryId: string, description: string) => {
-          const nextDescription = String(description || '').trim();
-          if (!journalEntryId || !nextDescription) return;
-          journalDescriptionBackfills.set(journalEntryId, nextDescription);
-        };
-        const queueJournalLineBackfill = (journalLineId: string, updates: Partial<JournalLine>) => {
-          if (!journalLineId) return;
-          const current = journalLineBackfills.get(journalLineId) || {};
-          journalLineBackfills.set(journalLineId, { ...current, ...updates });
-        };
-        const syncInvoiceArLineMemo = (journalEntryId: string, inv: any, description: string) => {
-          if (!journalEntryId || !description) return;
-
-          const preferredAccountId = sourceSponsors.find(s => s.id === inv.sponsorId)?.arAccountId;
-          const entryLines = normalizedJournalLines.filter((line: any) => line.journalEntryId === journalEntryId);
-          if (!entryLines.length) return;
-
-          const arLine = resolveInvoiceArJournalLine(
-            entryLines as JournalLine[],
-            {
-              sponsorId: inv.sponsorId,
-              studentId: inv.studentId
-            },
-            sourceAccounts,
-            preferredAccountId
+      // Assign sequential numbers to any entries that still lack a valid
+      // GL reference (either column missing or reference not matching pattern).
+      const missing = normalizedEntries.filter(e => {
+        const status = String(e.status || '').toUpperCase();
+        const isDraftLike = status === 'DRAFT' || status === 'ON_HOLD' || status === 'REVISION_REQUESTED' || status === 'PENDING' || status === 'PENDING_APPROVAL';
+        return !e.glEntryNumber && !isDraftLike;
+      });
+      if (missing.length > 0) {
+        const updates: Promise<any>[] = [];
+        missing.forEach(e => {
+          const newGl = generateNextGlRef();
+          const isCreditDebitMemoEntry =
+            String(e.sourceType || '').toUpperCase() === 'CREDIT_MEMO' ||
+            String(e.sourceType || '').toUpperCase() === 'DEBIT_MEMO' ||
+            /^(CM|DM|CDM|DBM)-/i.test(String(e.reference || '').trim()) ||
+            String(e.description || '').toUpperCase().includes('CREDIT MEMO') ||
+            String(e.description || '').toUpperCase().includes('DEBIT MEMO');
+          updates.push(
+            dataService.updateJournalEntry(e.id, isCreditDebitMemoEntry ? { glEntryNumber: newGl } : { glEntryNumber: newGl, reference: newGl })
+              .then(updated => {
+                e.glEntryNumber = updated.glEntryNumber;
+                e.reference = isCreditDebitMemoEntry ? e.reference : updated.reference;
+              })
+              .catch(err => console.warn('[App] failed to backfill GL for entry', e.id, err))
           );
-
-          if (!arLine) return;
-          const currentMemo = String(arLine.memo || arLine.description || '').trim();
-          if (currentMemo === description) return;
-
-          arLine.memo = description;
-          arLine.description = description;
-          queueJournalLineBackfill(arLine.id, { memo: description, description });
-        };
-        const findMatchingInvoiceEntry = (inv: any) => {
-          const sourceMatch = postedInvoiceEntries.find((e: any) => e.sourceRef === inv.id);
-          if (sourceMatch) return sourceMatch;
-
-          const invoiceGl = (inv.glEntryNumber || '').trim();
-          if (invoiceGl) {
-            const glMatch = postedInvoiceEntries.find((e: any) => resolveEntryGlRef(e) === invoiceGl);
-            if (glMatch) return glMatch;
-          }
-
-          const invoiceNo = (inv.invoiceNo || '').trim().toLowerCase();
-          if (invoiceNo) {
-            const descriptionMatch = postedInvoiceEntries.find((e: any) => {
-              const haystack = [
-                e.description,
-                e.reference,
-                e.glEntryNumber,
-                e.sourceRef
-              ].filter(Boolean).join(' ').toLowerCase();
-              return haystack.includes(invoiceNo);
-            });
-            if (descriptionMatch) return descriptionMatch;
-          }
-
-          return null;
-        };
-
-        let normalizedInvoices: any[] = (data.invoices || []).map((inv: any) => {
-          const next = { ...inv };
-          const status = String(inv.status || '').toUpperCase();
-          const invoiceDescription = String(inv.notes || '').trim();
-
-          if (inv.journalEntryId) {
-            const je = normalizedEntries.find(e => e.id === inv.journalEntryId);
-            const jeGl = resolveEntryGlRef(je);
-            if (jeGl && inv.glEntryNumber !== jeGl) {
-              queueInvoiceBackfill(inv.id, { glEntryNumber: jeGl });
-              next.glEntryNumber = jeGl;
-            }
-            if (invoiceDescription && je && je.description?.trim() !== invoiceDescription) {
-              queueJournalDescriptionBackfill(je.id, invoiceDescription);
-              je.description = invoiceDescription;
-            }
-            syncInvoiceArLineMemo(je?.id || '', inv, invoiceDescription);
-            if (je?.postedBy && !next.postedBy) {
-              queueInvoiceBackfill(inv.id, { postedBy: je.postedBy });
-              next.postedBy = je.postedBy;
-            }
-            if (je?.postedAt && !next.postedAt) {
-              queueInvoiceBackfill(inv.id, { postedAt: je.postedAt });
-              next.postedAt = je.postedAt;
-            }
-          } else if (status === 'OPEN') {
-            const matchingEntry = findMatchingInvoiceEntry(inv);
-            if (matchingEntry) {
-              const matchedGl = resolveEntryGlRef(matchingEntry);
-              const backfillUpdates: Partial<Invoice> = {
-                journalEntryId: matchingEntry.id
-              };
-
-              next.journalEntryId = matchingEntry.id;
-              if (invoiceDescription && matchingEntry.description?.trim() !== invoiceDescription) {
-                queueJournalDescriptionBackfill(matchingEntry.id, invoiceDescription);
-                matchingEntry.description = invoiceDescription;
-              }
-              syncInvoiceArLineMemo(matchingEntry.id, inv, invoiceDescription);
-
-              if (matchedGl && inv.glEntryNumber !== matchedGl) {
-                backfillUpdates.glEntryNumber = matchedGl;
-                next.glEntryNumber = matchedGl;
-              }
-              if (matchingEntry.postedBy && !next.postedBy) {
-                backfillUpdates.postedBy = matchingEntry.postedBy;
-                next.postedBy = matchingEntry.postedBy;
-              }
-              if (matchingEntry.postedAt && !next.postedAt) {
-                backfillUpdates.postedAt = matchingEntry.postedAt;
-                next.postedAt = matchingEntry.postedAt;
-              }
-
-              queueInvoiceBackfill(inv.id, backfillUpdates);
-            }
-          }
-
-          return next;
+          // also update local copy immediately so UI shows something
+          e.glEntryNumber = newGl;
+          if (!isCreditDebitMemoEntry) e.reference = newGl;
         });
+        Promise.all(updates)
+          .then(() => console.info('[App] backfilled missing GL numbers'))
+          .catch(err => console.warn('[App] failed to backfill missing GL numbers:', err));
+      }
 
-        if (journalLineBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(journalLineBackfills.entries()).map(([id, updates]) => {
-              return dataService.updateJournalLine(id, updates);
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some invoice journal line backfills failed', failures);
-              } else {
-                console.info('[App] backfilled invoice journal line descriptions');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill invoice journal line descriptions', err));
+      setJournalEntries(normalizedEntries);
+      const sourceAccounts = (data.accounts || []) as ChartOfAccount[];
+      const sourceSponsors = (data.sponsors || []) as Sponsor[];
+      const normalizedJournalLines: any[] = (data.journalLines || []).map((line: any) => ({ ...line }));
+
+      // Backfill invoice records with their posted journal entry links so the
+      // invoice screen, journal entry table, and GL reference all stay in sync.
+      const invoiceBackfills = new Map<string, Partial<Invoice>>();
+      const journalDescriptionBackfills = new Map<string, string>();
+      const journalLineBackfills = new Map<string, Partial<JournalLine>>();
+      const postedInvoiceEntries = normalizedEntries.filter((e: any) => {
+        const status = String(e.status || '').toUpperCase();
+        const sourceType = String(e.sourceType || '').toUpperCase();
+        return status === 'POSTED' && sourceType === 'INVOICE';
+      });
+      const resolveEntryGlRef = (entry?: any) => (entry ? (entry.glEntryNumber || entry.reference || '').trim() : '');
+      const queueInvoiceBackfill = (invoiceId: string, updates: Partial<Invoice>) => {
+        const current = invoiceBackfills.get(invoiceId) || {};
+        invoiceBackfills.set(invoiceId, { ...current, ...updates });
+      };
+      const queueJournalDescriptionBackfill = (journalEntryId: string, description: string) => {
+        const nextDescription = String(description || '').trim();
+        if (!journalEntryId || !nextDescription) return;
+        journalDescriptionBackfills.set(journalEntryId, nextDescription);
+      };
+      const queueJournalLineBackfill = (journalLineId: string, updates: Partial<JournalLine>) => {
+        if (!journalLineId) return;
+        const current = journalLineBackfills.get(journalLineId) || {};
+        journalLineBackfills.set(journalLineId, { ...current, ...updates });
+      };
+      const syncInvoiceArLineMemo = (journalEntryId: string, inv: any, description: string) => {
+        if (!journalEntryId || !description) return;
+
+        const preferredAccountId = sourceSponsors.find(s => s.id === inv.sponsorId)?.arAccountId;
+        const entryLines = normalizedJournalLines.filter((line: any) => line.journalEntryId === journalEntryId);
+        if (!entryLines.length) return;
+
+        const arLine = resolveInvoiceArJournalLine(
+          entryLines as JournalLine[],
+          {
+            sponsorId: inv.sponsorId,
+            studentId: inv.studentId
+          },
+          sourceAccounts,
+          preferredAccountId
+        );
+
+        if (!arLine) return;
+        const currentMemo = String(arLine.memo || arLine.description || '').trim();
+        if (currentMemo === description) return;
+
+        arLine.memo = description;
+        arLine.description = description;
+        queueJournalLineBackfill(arLine.id, { memo: description, description });
+      };
+      const findMatchingInvoiceEntry = (inv: any) => {
+        const sourceMatch = postedInvoiceEntries.find((e: any) => e.sourceRef === inv.id);
+        if (sourceMatch) return sourceMatch;
+
+        const invoiceGl = (inv.glEntryNumber || '').trim();
+        if (invoiceGl) {
+          const glMatch = postedInvoiceEntries.find((e: any) => resolveEntryGlRef(e) === invoiceGl);
+          if (glMatch) return glMatch;
         }
 
-        if (invoiceBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(invoiceBackfills.entries()).map(([id, updates]) => {
-              return dataService.updateInvoice(id, updates);
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some invoice journal backfills failed', failures);
-              } else {
-                console.info('[App] backfilled invoice journal references');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill invoice journal references', err));
+        const invoiceNo = (inv.invoiceNo || '').trim().toLowerCase();
+        if (invoiceNo) {
+          const descriptionMatch = postedInvoiceEntries.find((e: any) => {
+            const haystack = [
+              e.description,
+              e.reference,
+              e.glEntryNumber,
+              e.sourceRef
+            ].filter(Boolean).join(' ').toLowerCase();
+            return haystack.includes(invoiceNo);
+          });
+          if (descriptionMatch) return descriptionMatch;
         }
 
-        if (journalDescriptionBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(journalDescriptionBackfills.entries()).map(([id, description]) => {
-              return dataService.updateJournalEntry(id, { description });
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some invoice journal description backfills failed', failures);
-              } else {
-                console.info('[App] backfilled invoice journal descriptions');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill invoice journal descriptions', err));
+        return null;
+      };
+
+      let normalizedInvoices: any[] = (data.invoices || []).map((inv: any) => {
+        const next = { ...inv };
+        const status = String(inv.status || '').toUpperCase();
+        const invoiceDescription = String(inv.notes || '').trim();
+
+        if (inv.journalEntryId) {
+          const je = normalizedEntries.find(e => e.id === inv.journalEntryId);
+          const jeGl = resolveEntryGlRef(je);
+          if (jeGl && inv.glEntryNumber !== jeGl) {
+            queueInvoiceBackfill(inv.id, { glEntryNumber: jeGl });
+            next.glEntryNumber = jeGl;
+          }
+          if (invoiceDescription && je && je.description?.trim() !== invoiceDescription) {
+            queueJournalDescriptionBackfill(je.id, invoiceDescription);
+            je.description = invoiceDescription;
+          }
+          syncInvoiceArLineMemo(je?.id || '', inv, invoiceDescription);
+          if (je?.postedBy && !next.postedBy) {
+            queueInvoiceBackfill(inv.id, { postedBy: je.postedBy });
+            next.postedBy = je.postedBy;
+          }
+          if (je?.postedAt && !next.postedAt) {
+            queueInvoiceBackfill(inv.id, { postedAt: je.postedAt });
+            next.postedAt = je.postedAt;
+          }
+        } else if (status === 'OPEN') {
+          const matchingEntry = findMatchingInvoiceEntry(inv);
+          if (matchingEntry) {
+            const matchedGl = resolveEntryGlRef(matchingEntry);
+            const backfillUpdates: Partial<Invoice> = {
+              journalEntryId: matchingEntry.id
+            };
+
+            next.journalEntryId = matchingEntry.id;
+            if (invoiceDescription && matchingEntry.description?.trim() !== invoiceDescription) {
+              queueJournalDescriptionBackfill(matchingEntry.id, invoiceDescription);
+              matchingEntry.description = invoiceDescription;
+            }
+            syncInvoiceArLineMemo(matchingEntry.id, inv, invoiceDescription);
+
+            if (matchedGl && inv.glEntryNumber !== matchedGl) {
+              backfillUpdates.glEntryNumber = matchedGl;
+              next.glEntryNumber = matchedGl;
+            }
+            if (matchingEntry.postedBy && !next.postedBy) {
+              backfillUpdates.postedBy = matchingEntry.postedBy;
+              next.postedBy = matchingEntry.postedBy;
+            }
+            if (matchingEntry.postedAt && !next.postedAt) {
+              backfillUpdates.postedAt = matchingEntry.postedAt;
+              next.postedAt = matchingEntry.postedAt;
+            }
+
+            queueInvoiceBackfill(inv.id, backfillUpdates);
+          }
         }
-        setJournalLines(normalizedJournalLines);
-        setInvoices(normalizedInvoices);
 
-        // Debug: Log journal data to help diagnose AR invoice issue
-        console.info('[App] Loaded journal data:', {
-          entriesCount: data.journalEntries?.length || 0,
-          linesCount: normalizedJournalLines.length,
-          sampleEntry: data.journalEntries?.[0],
-          sampleLine: normalizedJournalLines?.[0],
-          invoiceEntries: data.journalEntries?.filter((e: any) => e.sourceType === 'INVOICE')?.length || 0,
-          invoiceLines: normalizedJournalLines?.filter((l: any) => {
-            const entry = data.journalEntries?.find((e: any) => e.id === l.journalEntryId);
-            return entry?.sourceType === 'INVOICE';
-          })?.length || 0
-        });
+        return next;
+      });
 
-        setPayrollRuns(data.payrollRuns);
-        setPayrollLines(data.payrollLines);
-        setAuditLogs(data.auditLogs);
-        setPurchaseOrders(data.purchaseOrders);
-        const loadedPayments = (data.payments || []).filter(p => !p.isDeleted) as Payment[];
-        const rawPaymentApplications = (data.paymentApplications || []) as PaymentApplication[];
-        const paymentMap = new Map(loadedPayments.map(payment => [payment.id, payment]));
-        const paymentApplicationNumberCounters = new Map<string, number>();
-        const paymentApplicationNumberBackfills: Array<{ id: string; applicationNo: string }> = [];
-        const paymentApplicationGlBackfills: Array<{ id: string; glReference: string }> = [];
-        const paymentApplicationJournalBackfills = new Map<string, { reference: string; description: string }>();
+      if (journalLineBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(journalLineBackfills.entries()).map(([id, updates]) => {
+            return dataService.updateJournalLine(id, updates);
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some invoice journal line backfills failed', failures);
+            } else {
+              console.info('[App] backfilled invoice journal line descriptions');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill invoice journal line descriptions', err));
+      }
 
-        rawPaymentApplications.forEach(application => {
+      if (invoiceBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(invoiceBackfills.entries()).map(([id, updates]) => {
+            return dataService.updateInvoice(id, updates);
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some invoice journal backfills failed', failures);
+            } else {
+              console.info('[App] backfilled invoice journal references');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill invoice journal references', err));
+      }
+
+      if (journalDescriptionBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(journalDescriptionBackfills.entries()).map(([id, description]) => {
+            return dataService.updateJournalEntry(id, { description });
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some invoice journal description backfills failed', failures);
+            } else {
+              console.info('[App] backfilled invoice journal descriptions');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill invoice journal descriptions', err));
+      }
+      setJournalLines(normalizedJournalLines);
+      setInvoices(normalizedInvoices);
+
+      // Debug: Log journal data to help diagnose AR invoice issue
+      console.info('[App] Loaded journal data:', {
+        entriesCount: data.journalEntries?.length || 0,
+        linesCount: normalizedJournalLines.length,
+        sampleEntry: data.journalEntries?.[0],
+        sampleLine: normalizedJournalLines?.[0],
+        invoiceEntries: data.journalEntries?.filter((e: any) => e.sourceType === 'INVOICE')?.length || 0,
+        invoiceLines: normalizedJournalLines?.filter((l: any) => {
+          const entry = data.journalEntries?.find((e: any) => e.id === l.journalEntryId);
+          return entry?.sourceType === 'INVOICE';
+        })?.length || 0
+      });
+
+      setPayrollRuns(data.payrollRuns);
+      setPayrollLines(data.payrollLines);
+      setAuditLogs(data.auditLogs);
+      setPurchaseOrders(data.purchaseOrders);
+      const loadedPayments = (data.payments || []).filter(p => !p.isDeleted) as Payment[];
+      const rawPaymentApplications = (data.paymentApplications || []) as PaymentApplication[];
+      const paymentMap = new Map(loadedPayments.map(payment => [payment.id, payment]));
+      const paymentApplicationNumberCounters = new Map<string, number>();
+      const paymentApplicationNumberBackfills: Array<{ id: string; applicationNo: string }> = [];
+      const paymentApplicationGlBackfills: Array<{ id: string; glReference: string }> = [];
+      const paymentApplicationJournalBackfills = new Map<string, { reference: string; description: string }>();
+
+      rawPaymentApplications.forEach(application => {
+        const payment = paymentMap.get(application.paymentId);
+        if (!payment?.orgId) return;
+        const year = application.createdAt
+          ? new Date(application.createdAt).getFullYear()
+          : new Date().getFullYear();
+        const sequence = extractPaymentApplicationSequence(application.applicationNo, year);
+        if (sequence <= 0) return;
+        const key = getPaymentApplicationSequenceKey(payment.orgId, year);
+        paymentApplicationNumberCounters.set(key, Math.max(paymentApplicationNumberCounters.get(key) || 0, sequence));
+      });
+
+      const loadedPaymentApplications = rawPaymentApplications
+        .slice()
+        .sort((a, b) => {
+          const createdAtDiff = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+          if (createdAtDiff !== 0) return createdAtDiff;
+          return String(a.id || '').localeCompare(String(b.id || ''));
+        })
+        .map(application => {
           const payment = paymentMap.get(application.paymentId);
-          if (!payment?.orgId) return;
+          const orgId = payment?.orgId || currentOrgId;
           const year = application.createdAt
             ? new Date(application.createdAt).getFullYear()
             : new Date().getFullYear();
-          const sequence = extractPaymentApplicationSequence(application.applicationNo, year);
-          if (sequence <= 0) return;
-          const key = getPaymentApplicationSequenceKey(payment.orgId, year);
-          paymentApplicationNumberCounters.set(key, Math.max(paymentApplicationNumberCounters.get(key) || 0, sequence));
-        });
+          const key = getPaymentApplicationSequenceKey(orgId, year);
 
-        const loadedPaymentApplications = rawPaymentApplications
-          .slice()
-          .sort((a, b) => {
-            const createdAtDiff = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
-            if (createdAtDiff !== 0) return createdAtDiff;
-            return String(a.id || '').localeCompare(String(b.id || ''));
-          })
-          .map(application => {
-            const payment = paymentMap.get(application.paymentId);
-            const orgId = payment?.orgId || currentOrgId;
-            const year = application.createdAt
-              ? new Date(application.createdAt).getFullYear()
-              : new Date().getFullYear();
-            const key = getPaymentApplicationSequenceKey(orgId, year);
+          let applicationNo = String(application.applicationNo || '').trim();
+          if (!applicationNo) {
+            const nextSequence = (paymentApplicationNumberCounters.get(key) || 0) + 1;
+            paymentApplicationNumberCounters.set(key, nextSequence);
+            applicationNo = formatPaymentApplicationNo(year, nextSequence);
+            paymentApplicationNumberBackfills.push({ id: application.id, applicationNo });
+          }
 
-            let applicationNo = String(application.applicationNo || '').trim();
-            if (!applicationNo) {
-              const nextSequence = (paymentApplicationNumberCounters.get(key) || 0) + 1;
-              paymentApplicationNumberCounters.set(key, nextSequence);
-              applicationNo = formatPaymentApplicationNo(year, nextSequence);
-              paymentApplicationNumberBackfills.push({ id: application.id, applicationNo });
-            }
+          const applicationJournalDetail = applicationNo;
+          const applicationDescription = application.description || applicationJournalDetail;
+          const journalEntry = application.journalEntryId
+            ? normalizedEntries.find(entry => entry.id === application.journalEntryId)
+            : undefined;
 
-            const applicationJournalDetail = applicationNo;
-            const applicationDescription = application.description || applicationJournalDetail;
-            const journalEntry = application.journalEntryId
-              ? normalizedEntries.find(entry => entry.id === application.journalEntryId)
-              : undefined;
-
-            if (
-              journalEntry &&
-              String(journalEntry.sourceType || '').toUpperCase() === 'APPLICATION' &&
-              (
-                String(journalEntry.reference || '').trim() !== applicationJournalDetail ||
-                String(journalEntry.description || '').trim() !== applicationDescription
-              )
-            ) {
-              journalEntry.reference = applicationJournalDetail;
-              journalEntry.description = applicationDescription;
-              paymentApplicationJournalBackfills.set(journalEntry.id, {
-                reference: applicationJournalDetail,
-                description: applicationDescription
-              });
-            }
-
-            let glReference = application.glReference;
-            if (!glReference && journalEntry) {
-              const resolvedGlRef = String(journalEntry?.glEntryNumber || journalEntry?.reference || '').trim();
-              if (resolvedGlRef) {
-                glReference = resolvedGlRef;
-                paymentApplicationGlBackfills.push({ id: application.id, glReference: resolvedGlRef });
-              }
-            }
-
-            return {
-              ...application,
-              orgId,
-              applicationNo,
-              glReference
-            } as PaymentApplication;
-          });
-
-        if (paymentApplicationNumberBackfills.length > 0) {
-          Promise.allSettled(
-            paymentApplicationNumberBackfills.map((applicationBackfill) =>
-              dataService.updateEntity('payment_applications', applicationBackfill.id, {
-                applicationNo: applicationBackfill.applicationNo,
-                updatedAt: new Date().toISOString()
-              })
+          if (
+            journalEntry &&
+            String(journalEntry.sourceType || '').toUpperCase() === 'APPLICATION' &&
+            (
+              String(journalEntry.reference || '').trim() !== applicationJournalDetail ||
+              String(journalEntry.description || '').trim() !== applicationDescription
             )
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment application number backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment application numbers');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment application numbers', err));
-        }
-
-        if (paymentApplicationGlBackfills.length > 0) {
-          Promise.allSettled(
-            paymentApplicationGlBackfills.map((applicationBackfill) =>
-              dataService.updateEntity('payment_applications', applicationBackfill.id, {
-                glReference: applicationBackfill.glReference,
-                updatedAt: new Date().toISOString()
-              })
-            )
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment application GL reference backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment application GL references');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment application GL references', err));
-        }
-
-        if (paymentApplicationJournalBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(paymentApplicationJournalBackfills.entries()).map(([id, updates]) =>
-              dataService.updateJournalEntry(id, updates)
-            )
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment application journal reference/details backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment application journal reference/details');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment application journal reference/details', err));
-        }
-        // backfill payment records with glEntryNumber from their journal entries
-        const paymentGlBackfills: Array<{ id: string; glEntryNumber: string }> = [];
-        const paymentStatusBackfills: Array<{ id: string; status: Payment['status'] }> = [];
-        const paymentAmountBackfills: Array<{ id: string; amountReceived: number; totalApplied: number; customerDepositBalance: number; status: Payment['status'] }> = [];
-        const paymentJournalDescriptionBackfills = new Map<string, string>();
-        const paymentLineBackfills = new Map<string, Partial<JournalLine>>();
-        const paymentsWithApplications = loadedPayments.map(payment => {
-          const apps = loadedPaymentApplications.filter(app => app.paymentId === payment.id);
-          const activeApps = apps.filter(app => !app.isReversed);
-          const appliedTotal = activeApps.reduce((sum, app) => sum + (app.amountApplied || 0), 0);
-          const totalApplied = payment.totalApplied ?? appliedTotal;
-          const sourceInvoiceId = String((payment as Payment & { sourceInvoiceId?: string }).sourceInvoiceId || '').trim();
-          const appliedInvoiceIds = Array.from(new Set(activeApps.map(app => String(app.invoiceId || '').trim()).filter(Boolean)));
-          const reconciledInvoiceId = sourceInvoiceId || (appliedInvoiceIds.length === 1 ? appliedInvoiceIds[0] : '');
-          const sourceInvoice = reconciledInvoiceId ? normalizedInvoices.find(invoice => invoice.id === reconciledInvoiceId) : undefined;
-          const allApplicationsBelongToSourceInvoice =
-            !!reconciledInvoiceId &&
-            activeApps.length > 0 &&
-            activeApps.every(app => app.invoiceId === reconciledInvoiceId);
-          const sourceInvoiceIsSettled =
-            !!sourceInvoice &&
-            (String(sourceInvoice.status || '').toUpperCase() === 'CLOSED' || Number(sourceInvoice.balanceDue ?? 0) <= 0.01);
-          const originalAmountReceived = Number(payment.amountReceived || 0);
-          const ewtAmount = Number(payment.ewtAmountCertified || 0);
-          let resolvedAmountReceived = originalAmountReceived;
-          let grossReceived = resolvedAmountReceived + ewtAmount;
-          const paymentTransactionDescription = resolvePaymentTransactionDescription(payment);
-          let resolvedBalance = payment.customerDepositBalance ?? Math.max(grossReceived - totalApplied, 0);
-
-          // Invoice-linked payments are meant to represent actual receipts for that invoice.
-          // If the invoice is now settled and this payment only applied to that invoice, trim
-          // an overstated default receipt amount down to the amount actually applied.
-          const shouldReconcileSourceInvoiceReceipt =
-            allApplicationsBelongToSourceInvoice &&
-            resolvedBalance > 0.01 &&
-            grossReceived > totalApplied + 0.01 &&
-            Math.abs(resolvedBalance - (grossReceived - totalApplied)) <= 0.01;
-
-          if (shouldReconcileSourceInvoiceReceipt) {
-            resolvedAmountReceived = Math.max(totalApplied - ewtAmount, 0);
-            grossReceived = resolvedAmountReceived + ewtAmount;
-            resolvedBalance = 0;
-          }
-
-          const resolvedPaymentForStatus = { ...payment, amountReceived: resolvedAmountReceived };
-          const resolvedStatus = resolveAppliedPaymentStatus(
-            resolvedPaymentForStatus,
-            totalApplied,
-            resolvedBalance
-          );
-          const persistableResolvedStatus = getPersistablePaymentStatus(resolvedStatus);
-
-          let glEntryNumber = payment.glEntryNumber;
-          if (!glEntryNumber && payment.journalEntryId) {
-            const je = normalizedEntries.find(e => e.id === payment.journalEntryId);
-            if (je && je.glEntryNumber) {
-              glEntryNumber = je.glEntryNumber;
-              paymentGlBackfills.push({ id: payment.id, glEntryNumber: je.glEntryNumber });
-            }
-          }
-
-          if (resolvedStatus !== 'CLOSED' && persistableResolvedStatus !== payment.status) {
-            paymentStatusBackfills.push({ id: payment.id, status: persistableResolvedStatus });
-          }
-
-          if (payment.journalEntryId) {
-            const paymentJournalEntry = normalizedEntries.find(e => e.id === payment.journalEntryId);
-            if (paymentJournalEntry && String(paymentJournalEntry.description || '').trim() !== paymentTransactionDescription) {
-              paymentJournalEntry.description = paymentTransactionDescription;
-              paymentJournalDescriptionBackfills.set(paymentJournalEntry.id, paymentTransactionDescription);
-            }
-            if (paymentJournalEntry && glEntryNumber && String(paymentJournalEntry.reference || '').trim() !== glEntryNumber) {
-              paymentJournalEntry.reference = glEntryNumber;
-            }
-          }
-
-          if (payment.journalEntryId) {
-            const entryLines = normalizedJournalLines.filter((line: any) => line.journalEntryId === payment.journalEntryId);
-            const amountReceived = originalAmountReceived;
-            const originalTotalCredit = amountReceived + ewtAmount;
-            const resolvedTotalCredit = resolvedAmountReceived + ewtAmount;
-            const cashLine = entryLines.find((line: any) => Math.abs(Number(line.debit || 0) - amountReceived) < 0.001 && Number(line.credit || 0) === 0);
-            const depositsLine = entryLines.find((line: any) => Math.abs(Number(line.credit || 0) - originalTotalCredit) < 0.001);
-            const ewtLine = ewtAmount > 0
-              ? entryLines.find((line: any) => Math.abs(Number(line.debit || 0) - ewtAmount) < 0.001 && Number(line.credit || 0) === 0)
-              : null;
-
-            const queuePaymentLineBackfill = (line: any, description: string) => {
-              if (!line || !description) return;
-              const currentMemo = String(line.memo || line.description || '').trim();
-              if (currentMemo === description) return;
-              line.memo = description;
-              line.description = description;
-              const current = paymentLineBackfills.get(line.id) || {};
-              paymentLineBackfills.set(line.id, { ...current, memo: description, description });
-            };
-
-            queuePaymentLineBackfill(cashLine, paymentTransactionDescription);
-            queuePaymentLineBackfill(depositsLine, paymentTransactionDescription);
-            if (shouldReconcileSourceInvoiceReceipt) {
-              if (cashLine && Math.abs(Number(cashLine.debit || 0) - resolvedAmountReceived) > 0.001) {
-                cashLine.debit = resolvedAmountReceived;
-                const current = paymentLineBackfills.get(cashLine.id) || {};
-                paymentLineBackfills.set(cashLine.id, { ...current, debit: resolvedAmountReceived });
-              }
-              if (depositsLine && Math.abs(Number(depositsLine.credit || 0) - resolvedTotalCredit) > 0.001) {
-                depositsLine.credit = resolvedTotalCredit;
-                const current = paymentLineBackfills.get(depositsLine.id) || {};
-                paymentLineBackfills.set(depositsLine.id, { ...current, credit: resolvedTotalCredit });
-              }
-            }
-            if (ewtLine) {
-              const ewtDescription = `Creditable Withholding Tax (CWT 2307) for ${payment.paymentNo}`;
-              queuePaymentLineBackfill(ewtLine, ewtDescription);
-            }
-          }
-
-          if (shouldReconcileSourceInvoiceReceipt) {
-            paymentAmountBackfills.push({
-              id: payment.id,
-              amountReceived: resolvedAmountReceived,
-              totalApplied,
-              customerDepositBalance: resolvedBalance,
-              status: persistableResolvedStatus
+          ) {
+            journalEntry.reference = applicationJournalDetail;
+            journalEntry.description = applicationDescription;
+            paymentApplicationJournalBackfills.set(journalEntry.id, {
+              reference: applicationJournalDetail,
+              description: applicationDescription
             });
+          }
+
+          let glReference = application.glReference;
+          if (!glReference && journalEntry) {
+            const resolvedGlRef = String(journalEntry?.glEntryNumber || journalEntry?.reference || '').trim();
+            if (resolvedGlRef) {
+              glReference = resolvedGlRef;
+              paymentApplicationGlBackfills.push({ id: application.id, glReference: resolvedGlRef });
+            }
           }
 
           return {
-            ...payment,
-            status: resolvedStatus,
-            glEntryNumber,
-            applications: apps,
-            amountReceived: resolvedAmountReceived,
-            totalApplied,
-            customerDepositBalance: resolvedBalance
-          } as Payment;
+            ...application,
+            orgId,
+            applicationNo,
+            glReference
+          } as PaymentApplication;
         });
 
-        if (paymentGlBackfills.length > 0) {
-          Promise.all(
-            paymentGlBackfills.map((p: any) => {
-              return dataService.updateEntity('payments', p.id, { glEntryNumber: p.glEntryNumber });
+      if (paymentApplicationNumberBackfills.length > 0) {
+        Promise.allSettled(
+          paymentApplicationNumberBackfills.map((applicationBackfill) =>
+            dataService.updateEntity('payment_applications', applicationBackfill.id, {
+              applicationNo: applicationBackfill.applicationNo,
+              updatedAt: new Date().toISOString()
             })
           )
-            .then(() => console.info('[App] backfilled missing payment GL references'))
-            .catch(err => console.warn('[App] failed to backfill payment GL references', err));
-        }
-        if (paymentStatusBackfills.length > 0) {
-          Promise.allSettled(
-            paymentStatusBackfills.map((paymentBackfill) => {
-              return dataService.updateEntity('payments', paymentBackfill.id, {
-                status: paymentBackfill.status,
-                updatedAt: new Date().toISOString()
-              });
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment status backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment lifecycle statuses');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment lifecycle statuses', err));
-        }
-        if (paymentAmountBackfills.length > 0) {
-          Promise.allSettled(
-            paymentAmountBackfills.map((paymentBackfill) => {
-              return dataService.updateEntity('payments', paymentBackfill.id, {
-                amountReceived: paymentBackfill.amountReceived,
-                totalApplied: paymentBackfill.totalApplied,
-                customerDepositBalance: paymentBackfill.customerDepositBalance,
-                status: paymentBackfill.status,
-                updatedAt: new Date().toISOString()
-              });
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some invoice-linked payment amount reconciliations failed', failures);
-              } else {
-                console.info('[App] reconciled overstated invoice-linked payment receipts');
-              }
-            })
-            .catch(err => console.warn('[App] failed to reconcile invoice-linked payment receipts', err));
-        }
-        if (paymentLineBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(paymentLineBackfills.entries()).map(([id, updates]) => {
-              return dataService.updateJournalLine(id, updates);
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment journal line backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment journal line descriptions');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment journal line descriptions', err));
-        }
-        if (paymentJournalDescriptionBackfills.size > 0) {
-          Promise.allSettled(
-            Array.from(paymentJournalDescriptionBackfills.entries()).map(([id, description]) => {
-              return dataService.updateJournalEntry(id, { description });
-            })
-          )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment journal description backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment journal descriptions');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment journal descriptions', err));
-        }
-        const paymentJournalReferenceBackfills = paymentsWithApplications
-          .filter(payment => payment.journalEntryId && payment.glEntryNumber)
-          .filter(payment => {
-            const entry = normalizedEntries.find(e => e.id === payment.journalEntryId);
-            return !!entry && String(entry.reference || '').trim() !== String(payment.glEntryNumber || '').trim();
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment application number backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment application numbers');
+            }
           })
-          .map(payment => ({
-            id: payment.journalEntryId as string,
-            reference: String(payment.glEntryNumber || '').trim()
-          }));
-        if (paymentJournalReferenceBackfills.length > 0) {
-          Promise.allSettled(
-            paymentJournalReferenceBackfills.map((item: any) => {
-              return dataService.updateJournalEntry(item.id, { reference: item.reference });
+          .catch(err => console.warn('[App] failed to backfill payment application numbers', err));
+      }
+
+      if (paymentApplicationGlBackfills.length > 0) {
+        Promise.allSettled(
+          paymentApplicationGlBackfills.map((applicationBackfill) =>
+            dataService.updateEntity('payment_applications', applicationBackfill.id, {
+              glReference: applicationBackfill.glReference,
+              updatedAt: new Date().toISOString()
             })
           )
-            .then(results => {
-              const failures = results.filter(result => result.status === 'rejected');
-              if (failures.length > 0) {
-                console.warn('[App] some payment journal reference backfills failed', failures);
-              } else {
-                console.info('[App] backfilled payment journal references');
-              }
-            })
-            .catch(err => console.warn('[App] failed to backfill payment journal references', err));
-        }
-        setJournalEntries([...normalizedEntries]);
-        setJournalLines(normalizedJournalLines);
-        setPayments(paymentsWithApplications);
-        setFixedAssets(data.fixedAssets);
-        setPayables(data.payables || []);
-        setVendorTaxSettings(data.vendorTaxSettings || []);
-        setAtcCategories(data.atcCategories || []);
-        setAtcItems(data.atcItems || []);
-        setAtcRates(data.atcRates || []);
-
-        // Load Inventory Data
-        setWarehouseLocations(data.warehouseLocations || []);
-        setStockItems(data.stockItems || []);
-        setInventoryLevels(data.inventoryLevels || []);
-        setInventoryTransactions(data.inventoryTransactions || []);
-        setStockAdjustments(data.stockAdjustments || []);
-        setReorderPoints(data.reorderPoints || []);
-        setEnrollments(data.enrollments || []);
-        const normalizedAssessmentRegistrations = (data.assessmentRegistrations || []).map(withAutoCompletedAssessmentRegistration);
-        setAssessmentRegistrations(normalizedAssessmentRegistrations);
-        normalizedAssessmentRegistrations
-          .filter((registration, index) => registration.status !== (data.assessmentRegistrations || [])[index]?.status)
-          .forEach(registration => {
-            service.updateAssessmentRegistration(registration.id, {
-              status: registration.status,
-              updatedAt: registration.updatedAt || new Date().toISOString()
-            }).catch(error => console.warn('[App] Failed to auto-complete assessment registration:', registration.id, error));
-          });
-        setAlumniReports(data.alumniReports || []);
-        setFeedbackTickets(data.feedbackTickets || []);
-
-        // Load Course Fees
-        setCourseFees(data.courseFees || []);
-        setTaxCategories(data.taxCategories || []);
-        if (data.organizations.length > 0) {
-          // Get the active session/user to check user's orgId
-          const activeUser = explicitUser !== undefined ? explicitUser : (currentUserRef.current || authService.getSession()?.user);
-          const userOrgId = activeUser?.orgId;
-          const userOrgExists = data.organizations.some(o => o.id === userOrgId && !o.isDeleted);
-          const isSystemAdmin = activeUser?.role === 'SYSTEM_ADMIN';
-
-          console.log('[App] Organization selection:', { userOrgId, userOrgExists, isSystemAdmin, user: activeUser?.email });
-
-          // Validate: User must have an organization OR be a SYSTEM_ADMIN
-          if (activeUser && !userOrgExists && !isSystemAdmin) {
-            console.error('[App] ❌ Validation failed: User has no valid organization and is not SYSTEM_ADMIN');
-            authService.logout();
-            setCurrentUser(null);
-            setCurrentOrgId('');
-            handleNotify('error', 'Access Denied: Your organization is no longer available. Please contact your system administrator.');
-            setIsLoading(false);
-            return;
-          }
-
-          if (userOrgId && userOrgExists) {
-            // User belongs to this org - use it
-            setCurrentOrgId(userOrgId);
-            console.log('[App] ✅ Set organization from user record:', userOrgId);
-          } else if (isSystemAdmin && data.organizations.length > 0) {
-            // SYSTEM_ADMIN: keep existing valid currentOrgId, otherwise userOrgId, otherwise first available
-            setCurrentOrgId(prev => {
-              if (prev && data.organizations.some(o => o.id === prev && !o.isDeleted)) {
-                return prev;
-              }
-              if (userOrgId && userOrgExists) return userOrgId;
-              return data.organizations[0].id;
-            });
-            console.log('[App] SYSTEM_ADMIN: Set organization');
-          } else if (data.organizations.length > 0 && !activeUser) {
-            // No user logged in: use first organization for initial context
-            setCurrentOrgId(data.organizations[0].id);
-            console.log('[App] No logged-in user: Set organization to first available:', data.organizations[0].id);
-          }
-        }
-        console.log("✅ State updated, data load complete");
-      } catch (error) {
-        console.error("❌ Critical Data Load Error:", error);
-      } finally {
-        console.log("🏁 Setting isLoading to false");
-        setIsLoading(false);
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment application GL reference backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment application GL references');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment application GL references', err));
       }
-    },
+
+      if (paymentApplicationJournalBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(paymentApplicationJournalBackfills.entries()).map(([id, updates]) =>
+            dataService.updateJournalEntry(id, updates)
+          )
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment application journal reference/details backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment application journal reference/details');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment application journal reference/details', err));
+      }
+      // backfill payment records with glEntryNumber from their journal entries
+      const paymentGlBackfills: Array<{ id: string; glEntryNumber: string }> = [];
+      const paymentStatusBackfills: Array<{ id: string; status: Payment['status'] }> = [];
+      const paymentAmountBackfills: Array<{ id: string; amountReceived: number; totalApplied: number; customerDepositBalance: number; status: Payment['status'] }> = [];
+      const paymentJournalDescriptionBackfills = new Map<string, string>();
+      const paymentLineBackfills = new Map<string, Partial<JournalLine>>();
+      const paymentsWithApplications = loadedPayments.map(payment => {
+        const apps = loadedPaymentApplications.filter(app => app.paymentId === payment.id);
+        const activeApps = apps.filter(app => !app.isReversed);
+        const appliedTotal = activeApps.reduce((sum, app) => sum + (app.amountApplied || 0), 0);
+        const totalApplied = payment.totalApplied ?? appliedTotal;
+        const sourceInvoiceId = String((payment as Payment & { sourceInvoiceId?: string }).sourceInvoiceId || '').trim();
+        const appliedInvoiceIds = Array.from(new Set(activeApps.map(app => String(app.invoiceId || '').trim()).filter(Boolean)));
+        const reconciledInvoiceId = sourceInvoiceId || (appliedInvoiceIds.length === 1 ? appliedInvoiceIds[0] : '');
+        const sourceInvoice = reconciledInvoiceId ? normalizedInvoices.find(invoice => invoice.id === reconciledInvoiceId) : undefined;
+        const allApplicationsBelongToSourceInvoice =
+          !!reconciledInvoiceId &&
+          activeApps.length > 0 &&
+          activeApps.every(app => app.invoiceId === reconciledInvoiceId);
+        const sourceInvoiceIsSettled =
+          !!sourceInvoice &&
+          (String(sourceInvoice.status || '').toUpperCase() === 'CLOSED' || Number(sourceInvoice.balanceDue ?? 0) <= 0.01);
+        const originalAmountReceived = Number(payment.amountReceived || 0);
+        const ewtAmount = Number(payment.ewtAmountCertified || 0);
+        let resolvedAmountReceived = originalAmountReceived;
+        let grossReceived = resolvedAmountReceived + ewtAmount;
+        const paymentTransactionDescription = resolvePaymentTransactionDescription(payment);
+        let resolvedBalance = payment.customerDepositBalance ?? Math.max(grossReceived - totalApplied, 0);
+
+        // Invoice-linked payments are meant to represent actual receipts for that invoice.
+        // If the invoice is now settled and this payment only applied to that invoice, trim
+        // an overstated default receipt amount down to the amount actually applied.
+        const shouldReconcileSourceInvoiceReceipt =
+          allApplicationsBelongToSourceInvoice &&
+          resolvedBalance > 0.01 &&
+          grossReceived > totalApplied + 0.01 &&
+          Math.abs(resolvedBalance - (grossReceived - totalApplied)) <= 0.01;
+
+        if (shouldReconcileSourceInvoiceReceipt) {
+          resolvedAmountReceived = Math.max(totalApplied - ewtAmount, 0);
+          grossReceived = resolvedAmountReceived + ewtAmount;
+          resolvedBalance = 0;
+        }
+
+        const resolvedPaymentForStatus = { ...payment, amountReceived: resolvedAmountReceived };
+        const resolvedStatus = resolveAppliedPaymentStatus(
+          resolvedPaymentForStatus,
+          totalApplied,
+          resolvedBalance
+        );
+        const persistableResolvedStatus = getPersistablePaymentStatus(resolvedStatus);
+
+        let glEntryNumber = payment.glEntryNumber;
+        if (!glEntryNumber && payment.journalEntryId) {
+          const je = normalizedEntries.find(e => e.id === payment.journalEntryId);
+          if (je && je.glEntryNumber) {
+            glEntryNumber = je.glEntryNumber;
+            paymentGlBackfills.push({ id: payment.id, glEntryNumber: je.glEntryNumber });
+          }
+        }
+
+        if (resolvedStatus !== 'CLOSED' && persistableResolvedStatus !== payment.status) {
+          paymentStatusBackfills.push({ id: payment.id, status: persistableResolvedStatus });
+        }
+
+        if (payment.journalEntryId) {
+          const paymentJournalEntry = normalizedEntries.find(e => e.id === payment.journalEntryId);
+          if (paymentJournalEntry && String(paymentJournalEntry.description || '').trim() !== paymentTransactionDescription) {
+            paymentJournalEntry.description = paymentTransactionDescription;
+            paymentJournalDescriptionBackfills.set(paymentJournalEntry.id, paymentTransactionDescription);
+          }
+          if (paymentJournalEntry && glEntryNumber && String(paymentJournalEntry.reference || '').trim() !== glEntryNumber) {
+            paymentJournalEntry.reference = glEntryNumber;
+          }
+        }
+
+        if (payment.journalEntryId) {
+          const entryLines = normalizedJournalLines.filter((line: any) => line.journalEntryId === payment.journalEntryId);
+          const amountReceived = originalAmountReceived;
+          const originalTotalCredit = amountReceived + ewtAmount;
+          const resolvedTotalCredit = resolvedAmountReceived + ewtAmount;
+          const cashLine = entryLines.find((line: any) => Math.abs(Number(line.debit || 0) - amountReceived) < 0.001 && Number(line.credit || 0) === 0);
+          const depositsLine = entryLines.find((line: any) => Math.abs(Number(line.credit || 0) - originalTotalCredit) < 0.001);
+          const ewtLine = ewtAmount > 0
+            ? entryLines.find((line: any) => Math.abs(Number(line.debit || 0) - ewtAmount) < 0.001 && Number(line.credit || 0) === 0)
+            : null;
+
+          const queuePaymentLineBackfill = (line: any, description: string) => {
+            if (!line || !description) return;
+            const currentMemo = String(line.memo || line.description || '').trim();
+            if (currentMemo === description) return;
+            line.memo = description;
+            line.description = description;
+            const current = paymentLineBackfills.get(line.id) || {};
+            paymentLineBackfills.set(line.id, { ...current, memo: description, description });
+          };
+
+          queuePaymentLineBackfill(cashLine, paymentTransactionDescription);
+          queuePaymentLineBackfill(depositsLine, paymentTransactionDescription);
+          if (shouldReconcileSourceInvoiceReceipt) {
+            if (cashLine && Math.abs(Number(cashLine.debit || 0) - resolvedAmountReceived) > 0.001) {
+              cashLine.debit = resolvedAmountReceived;
+              const current = paymentLineBackfills.get(cashLine.id) || {};
+              paymentLineBackfills.set(cashLine.id, { ...current, debit: resolvedAmountReceived });
+            }
+            if (depositsLine && Math.abs(Number(depositsLine.credit || 0) - resolvedTotalCredit) > 0.001) {
+              depositsLine.credit = resolvedTotalCredit;
+              const current = paymentLineBackfills.get(depositsLine.id) || {};
+              paymentLineBackfills.set(depositsLine.id, { ...current, credit: resolvedTotalCredit });
+            }
+          }
+          if (ewtLine) {
+            const ewtDescription = `Creditable Withholding Tax (CWT 2307) for ${payment.paymentNo}`;
+            queuePaymentLineBackfill(ewtLine, ewtDescription);
+          }
+        }
+
+        if (shouldReconcileSourceInvoiceReceipt) {
+          paymentAmountBackfills.push({
+            id: payment.id,
+            amountReceived: resolvedAmountReceived,
+            totalApplied,
+            customerDepositBalance: resolvedBalance,
+            status: persistableResolvedStatus
+          });
+        }
+
+        return {
+          ...payment,
+          status: resolvedStatus,
+          glEntryNumber,
+          applications: apps,
+          amountReceived: resolvedAmountReceived,
+          totalApplied,
+          customerDepositBalance: resolvedBalance
+        } as Payment;
+      });
+
+      if (paymentGlBackfills.length > 0) {
+        Promise.all(
+          paymentGlBackfills.map((p: any) => {
+            return dataService.updateEntity('payments', p.id, { glEntryNumber: p.glEntryNumber });
+          })
+        )
+          .then(() => console.info('[App] backfilled missing payment GL references'))
+          .catch(err => console.warn('[App] failed to backfill payment GL references', err));
+      }
+      if (paymentStatusBackfills.length > 0) {
+        Promise.allSettled(
+          paymentStatusBackfills.map((paymentBackfill) => {
+            return dataService.updateEntity('payments', paymentBackfill.id, {
+              status: paymentBackfill.status,
+              updatedAt: new Date().toISOString()
+            });
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment status backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment lifecycle statuses');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment lifecycle statuses', err));
+      }
+      if (paymentAmountBackfills.length > 0) {
+        Promise.allSettled(
+          paymentAmountBackfills.map((paymentBackfill) => {
+            return dataService.updateEntity('payments', paymentBackfill.id, {
+              amountReceived: paymentBackfill.amountReceived,
+              totalApplied: paymentBackfill.totalApplied,
+              customerDepositBalance: paymentBackfill.customerDepositBalance,
+              status: paymentBackfill.status,
+              updatedAt: new Date().toISOString()
+            });
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some invoice-linked payment amount reconciliations failed', failures);
+            } else {
+              console.info('[App] reconciled overstated invoice-linked payment receipts');
+            }
+          })
+          .catch(err => console.warn('[App] failed to reconcile invoice-linked payment receipts', err));
+      }
+      if (paymentLineBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(paymentLineBackfills.entries()).map(([id, updates]) => {
+            return dataService.updateJournalLine(id, updates);
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment journal line backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment journal line descriptions');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment journal line descriptions', err));
+      }
+      if (paymentJournalDescriptionBackfills.size > 0) {
+        Promise.allSettled(
+          Array.from(paymentJournalDescriptionBackfills.entries()).map(([id, description]) => {
+            return dataService.updateJournalEntry(id, { description });
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment journal description backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment journal descriptions');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment journal descriptions', err));
+      }
+      const paymentJournalReferenceBackfills = paymentsWithApplications
+        .filter(payment => payment.journalEntryId && payment.glEntryNumber)
+        .filter(payment => {
+          const entry = normalizedEntries.find(e => e.id === payment.journalEntryId);
+          return !!entry && String(entry.reference || '').trim() !== String(payment.glEntryNumber || '').trim();
+        })
+        .map(payment => ({
+          id: payment.journalEntryId as string,
+          reference: String(payment.glEntryNumber || '').trim()
+        }));
+      if (paymentJournalReferenceBackfills.length > 0) {
+        Promise.allSettled(
+          paymentJournalReferenceBackfills.map((item: any) => {
+            return dataService.updateJournalEntry(item.id, { reference: item.reference });
+          })
+        )
+          .then(results => {
+            const failures = results.filter(result => result.status === 'rejected');
+            if (failures.length > 0) {
+              console.warn('[App] some payment journal reference backfills failed', failures);
+            } else {
+              console.info('[App] backfilled payment journal references');
+            }
+          })
+          .catch(err => console.warn('[App] failed to backfill payment journal references', err));
+      }
+      setJournalEntries([...normalizedEntries]);
+      setJournalLines(normalizedJournalLines);
+      setPayments(paymentsWithApplications);
+      setFixedAssets(data.fixedAssets);
+      setPayables(data.payables || []);
+      setVendorTaxSettings(data.vendorTaxSettings || []);
+      setAtcCategories(data.atcCategories || []);
+      setAtcItems(data.atcItems || []);
+      setAtcRates(data.atcRates || []);
+
+      // Load Inventory Data
+      setWarehouseLocations(data.warehouseLocations || []);
+      setStockItems(data.stockItems || []);
+      setInventoryLevels(data.inventoryLevels || []);
+      setInventoryTransactions(data.inventoryTransactions || []);
+      setStockAdjustments(data.stockAdjustments || []);
+      setReorderPoints(data.reorderPoints || []);
+      setEnrollments(data.enrollments || []);
+      const normalizedAssessmentRegistrations = (data.assessmentRegistrations || []).map(withAutoCompletedAssessmentRegistration);
+      setAssessmentRegistrations(normalizedAssessmentRegistrations);
+      normalizedAssessmentRegistrations
+        .filter((registration, index) => registration.status !== (data.assessmentRegistrations || [])[index]?.status)
+        .forEach(registration => {
+          service.updateAssessmentRegistration(registration.id, {
+            status: registration.status,
+            updatedAt: registration.updatedAt || new Date().toISOString()
+          }).catch(error => console.warn('[App] Failed to auto-complete assessment registration:', registration.id, error));
+        });
+      setAlumniReports(data.alumniReports || []);
+      setFeedbackTickets(data.feedbackTickets || []);
+
+      // Load Course Fees
+      setCourseFees(data.courseFees || []);
+      setTaxCategories(data.taxCategories || []);
+      if (data.organizations.length > 0) {
+        // Get the active session/user to check user's orgId
+        const activeUser = explicitUser !== undefined ? explicitUser : (currentUserRef.current || authService.getSession()?.user);
+        const userOrgId = activeUser?.orgId;
+        const userOrgExists = data.organizations.some(o => o.id === userOrgId && !o.isDeleted);
+        const isSystemAdmin = activeUser?.role === 'SYSTEM_ADMIN';
+
+        console.log('[App] Organization selection:', { userOrgId, userOrgExists, isSystemAdmin, user: activeUser?.email });
+
+        // Validate: User must have an organization OR be a SYSTEM_ADMIN
+        if (activeUser && !userOrgExists && !isSystemAdmin) {
+          console.error('[App] ❌ Validation failed: User has no valid organization and is not SYSTEM_ADMIN');
+          authService.logout();
+          setCurrentUser(null);
+          setCurrentOrgId('');
+          handleNotify('error', 'Access Denied: Your organization is no longer available. Please contact your system administrator.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (userOrgId && userOrgExists) {
+          // User belongs to this org - use it
+          setCurrentOrgId(userOrgId);
+          console.log('[App] ✅ Set organization from user record:', userOrgId);
+        } else if (isSystemAdmin && data.organizations.length > 0) {
+          // SYSTEM_ADMIN: keep existing valid currentOrgId, otherwise userOrgId, otherwise first available
+          setCurrentOrgId(prev => {
+            if (prev && data.organizations.some(o => o.id === prev && !o.isDeleted)) {
+              return prev;
+            }
+            if (userOrgId && userOrgExists) return userOrgId;
+            return data.organizations[0].id;
+          });
+          console.log('[App] SYSTEM_ADMIN: Set organization');
+        } else if (data.organizations.length > 0 && !activeUser) {
+          // No user logged in: use first organization for initial context
+          setCurrentOrgId(data.organizations[0].id);
+          console.log('[App] No logged-in user: Set organization to first available:', data.organizations[0].id);
+        }
+      }
+      console.log("✅ State updated, data load complete");
+    } catch (error) {
+      console.error("❌ Critical Data Load Error:", error);
+    } finally {
+      console.log("🏁 Setting isLoading to false");
+      setIsLoading(false);
+    }
+  },
     []
   );
 
@@ -1616,7 +1616,7 @@ export default function App() {
   const activeEntryIds = useMemo(() => new Set(activeJournalEntries.map(e => e.id)), [activeJournalEntries]);
   const filteredLines = useMemo(() => journalLines.filter(l => activeEntryIds.has(l.journalEntryId)), [journalLines, activeEntryIds]);
   const postedJournalEntries = useMemo(
-    () => activeJournalEntries.filter(e => e.status === 'POSTED'),
+    () => activeJournalEntries.filter(e => e.status === 'POSTED' || e.status === 'REVERSED'),
     [activeJournalEntries]
   );
   const postedEntryIds = useMemo(() => new Set(postedJournalEntries.map(e => e.id)), [postedJournalEntries]);
@@ -1793,7 +1793,8 @@ export default function App() {
     return journalEntries.find(entry => {
       if (entry.orgId !== currentOrgId) return false;
       if (String(entry.status || '').toUpperCase() !== 'POSTED') return false;
-      if (String(entry.sourceType || '').toUpperCase() !== 'INVOICE') return false;
+      const entrySourceType = String(entry.sourceType || '').toUpperCase();
+      if (entrySourceType !== 'INVOICE' && entrySourceType !== 'NON_INVOICE_PAYMENT') return false;
       if (invoice.journalEntryId && entry.id === invoice.journalEntryId) return true;
       if (invoiceSourceRef && entry.sourceRef === invoiceSourceRef) return true;
       return !!invoiceGlRef && resolveJournalRef(entry) === invoiceGlRef;
@@ -1914,8 +1915,8 @@ export default function App() {
     const qualificationId = isDefaultJournalClassificationAccount(account)
       ? ''
       : (classificationCode
-          ? (qualifications.find(q => q.code === classificationCode)?.id || (line as any).qualificationId || account?.qualificationId || '')
-          : (line as any).qualificationId || account?.qualificationId || '');
+        ? (qualifications.find(q => q.code === classificationCode)?.id || (line as any).qualificationId || account?.qualificationId || '')
+        : (line as any).qualificationId || account?.qualificationId || '');
 
     return {
       ...line,
@@ -1972,7 +1973,16 @@ export default function App() {
     }
 
     let resolvedPeriodId = resolvePostingPeriodId(entry.periodId, entry.date);
-    if (!resolvedPeriodId && sourceType === 'INVOICE') {
+    if (
+      !resolvedPeriodId &&
+      (
+        sourceType === 'INVOICE' ||
+        sourceType === 'NON_INVOICE_PAYMENT' ||
+        sourceType === 'PAYMENT' ||
+        sourceType === 'APPLICATION' ||
+        sourceType === 'REVERSAL'
+      )
+    ) {
       resolvedPeriodId = resolveInvoiceFallbackPeriodId(entry.date);
     }
     if (!resolvedPeriodId) {
@@ -2012,21 +2022,21 @@ export default function App() {
       // if line insertion fails, an unbalanced/orphaned POSTED entry never pollutes the GL.
       const savedEntry = existingManualEntry
         ? await dataService.updateJournalEntry(existingManualEntry.id, {
-            status: 'POSTED',
-            periodId: resolvedPeriodId,
-            glEntryNumber: fullEntry.glEntryNumber,
-            reference: fullEntry.reference,
-            postedBy: currentUser?.id || 'system',
-            postedAt: postingTimestamp,
-            updatedBy: currentUser?.id || 'system',
-            updatedAt: postingTimestamp
-          })
+          status: 'POSTED',
+          periodId: resolvedPeriodId,
+          glEntryNumber: fullEntry.glEntryNumber,
+          reference: fullEntry.reference,
+          postedBy: currentUser?.id || 'system',
+          postedAt: postingTimestamp,
+          updatedBy: currentUser?.id || 'system',
+          updatedAt: postingTimestamp
+        })
         : await dataService.createJournalEntry({
-            ...fullEntry,
-            status: 'DRAFT',
-            postedBy: currentUser?.id || 'system',
-            postedAt: postingTimestamp
-          });
+          ...fullEntry,
+          status: 'DRAFT',
+          postedBy: currentUser?.id || 'system',
+          postedAt: postingTimestamp
+        });
       // Keep the complete submitted record in local state even when PostgREST or
       // a compatibility fallback returns only a subset of columns. Fields such
       // as orgId and sourceType are used by the active-view filters, so dropping
@@ -2122,12 +2132,17 @@ export default function App() {
       return normalizedSavedEntry;
     } catch (error) {
       console.error('[App] Error posting journal entry:', error);
-      // Notify user that GL posting failed
+      // Notify user that GL posting failed with the underlying error reason
+      const errorDetail = error instanceof Error ? error.message : String(error || '').trim();
       const source = (entry.sourceType || '').toUpperCase();
-      if (source === 'INVOICE') {
-        handleNotify('error', 'Failed to post journal entry to GL; invoice remains unposted.');
+      if (source === 'INVOICE' || source === 'NON_INVOICE_PAYMENT') {
+        handleNotify('error', errorDetail
+          ? `Failed to post journal entry to GL: ${errorDetail}`
+          : 'Failed to post journal entry to GL; document remains on hold.');
       } else {
-        handleNotify('error', 'Failed to post journal entry to GL.');
+        handleNotify('error', errorDetail
+          ? `Failed to post journal entry to GL: ${errorDetail}`
+          : 'Failed to post journal entry to GL.');
       }
 
       // Audit the failure for diagnostics
@@ -2673,13 +2688,13 @@ export default function App() {
     const sourceType = String(entry.sourceType || '').toUpperCase();
     const sourceInvoice = sourceType === 'INVOICE'
       ? invoices.find(inv =>
-          inv.orgId === currentOrgId &&
-          (
-            inv.id === entry.sourceRef ||
-            inv.invoiceNo === entry.sourceRef ||
-            inv.glEntryNumber === entry.sourceRef
-          )
+        inv.orgId === currentOrgId &&
+        (
+          inv.id === entry.sourceRef ||
+          inv.invoiceNo === entry.sourceRef ||
+          inv.glEntryNumber === entry.sourceRef
         )
+      )
       : null;
 
     setJournalFormEntry(
@@ -2705,35 +2720,35 @@ export default function App() {
     }
     const enrichedLines = sourceType === 'INVOICE'
       ? (() => {
-          const sourceInvoiceLines = (sourceLines && sourceLines.length > 0)
-            ? sourceLines
-            : (() => {
-                return sourceInvoice?.lines || [];
-              })();
-          const invoiceLines = (sourceInvoiceLines || [])
-            .slice()
-            .sort((a, b) => (a.lineNumber || 0) - (b.lineNumber || 0))
-            .map((line: any) => String(line.classificationCode || '').trim());
-          if (invoiceLines.length === 0) return entryLines;
+        const sourceInvoiceLines = (sourceLines && sourceLines.length > 0)
+          ? sourceLines
+          : (() => {
+            return sourceInvoice?.lines || [];
+          })();
+        const invoiceLines = (sourceInvoiceLines || [])
+          .slice()
+          .sort((a, b) => (a.lineNumber || 0) - (b.lineNumber || 0))
+          .map((line: any) => String(line.classificationCode || '').trim());
+        if (invoiceLines.length === 0) return entryLines;
 
-          let invoiceLineIndex = 0;
-          return entryLines.map(line => {
-            const account = filteredAccounts.find(account => account.id === line.accountId);
-            const isRevenueOrExpense = account?.class === AccountClass.REVENUE || account?.class === AccountClass.EXPENSE;
-            if (!isRevenueOrExpense) return line;
+        let invoiceLineIndex = 0;
+        return entryLines.map(line => {
+          const account = filteredAccounts.find(account => account.id === line.accountId);
+          const isRevenueOrExpense = account?.class === AccountClass.REVENUE || account?.class === AccountClass.EXPENSE;
+          if (!isRevenueOrExpense) return line;
 
-            const existingClassCode = String((line as any).classificationCode || '').trim();
-            const classificationCode = existingClassCode || invoiceLines[invoiceLineIndex] || '';
-            const qualificationId = classificationCode
-              ? (qualifications.find(q => q.code === classificationCode)?.id || (line as any).qualificationId || '')
-              : (line as any).qualificationId || '';
-            invoiceLineIndex += 1;
+          const existingClassCode = String((line as any).classificationCode || '').trim();
+          const classificationCode = existingClassCode || invoiceLines[invoiceLineIndex] || '';
+          const qualificationId = classificationCode
+            ? (qualifications.find(q => q.code === classificationCode)?.id || (line as any).qualificationId || '')
+            : (line as any).qualificationId || '';
+          invoiceLineIndex += 1;
 
-            return classificationCode
-              ? ({ ...line, classificationCode, qualificationId } as JournalLine & { classificationCode?: string; qualificationId?: string })
-              : line;
-          });
-        })()
+          return classificationCode
+            ? ({ ...line, classificationCode, qualificationId } as JournalLine & { classificationCode?: string; qualificationId?: string })
+            : line;
+        });
+      })()
       : entryLines;
     setJournalFormLines(enrichedLines);
     setJournalFormMode('view');
@@ -3228,11 +3243,11 @@ export default function App() {
       const existing = students.find(s => s.id === student.id);
       const mergedStudent = existing
         ? {
-            ...existing,
-            ...student,
-            profilePhoto: student.profilePhoto ?? existing.profilePhoto,
-            documents: student.documents ?? existing.documents,
-          }
+          ...existing,
+          ...student,
+          profilePhoto: student.profilePhoto ?? existing.profilePhoto,
+          documents: student.documents ?? existing.documents,
+        }
         : student;
       const updated = await dataService.updateStudent(student.id, mergedStudent);
       setStudents(prev => prev.map(s => s.id === student.id ? updated : s));
@@ -5204,8 +5219,15 @@ export default function App() {
             postedAt: postingResult.now
           };
         } else {
-          // posting failed – don't mark the invoice as open
-          invoice.status = 'DRAFT';
+          // posting failed – don't mark the invoice as open or stamp postedAt on a draft
+          invoice = {
+            ...invoice,
+            status: 'DRAFT',
+            postedAt: undefined,
+            postedBy: undefined,
+            journalEntryId: undefined,
+            glEntryNumber: undefined
+          };
           handleNotify('warning', 'Invoice saved as draft because GL posting failed. Please try posting again later.');
         }
       }
@@ -5306,12 +5328,12 @@ export default function App() {
       preferredAccountId: (sponsor as any)?.arAccountId
     });
     const cashOnHandAccount = filteredAccounts.find(a =>
-      !a.isHeader && a.class === AccountClass.ASSET && 
+      !a.isHeader && a.class === AccountClass.ASSET &&
       (String(a.name || '').toLowerCase().includes('cash on hand') || String(a.name || '').toLowerCase().includes('petty cash') || a.code === '1101' || a.code === '1010')
     ) || filteredAccounts.find(a => !a.isHeader && a.class === AccountClass.ASSET && String(a.name || '').toLowerCase().includes('cash'));
 
     const operatingBankAccount = filteredAccounts.find(a =>
-      !a.isHeader && a.class === AccountClass.ASSET && 
+      !a.isHeader && a.class === AccountClass.ASSET &&
       (String(a.name || '').toLowerCase().includes('operating') || String(a.name || '').toLowerCase().includes('checking') || String(a.name || '').toLowerCase().includes('bank') || a.code === '1100' || a.code === '1020')
     ) || filteredAccounts.find(a => !a.isHeader && a.class === AccountClass.ASSET && (String(a.name || '').toLowerCase().includes('bank') || String(a.name || '').toLowerCase().includes('cash')));
 
@@ -5353,28 +5375,32 @@ export default function App() {
       description: invoiceTransactionDescription,
       memo: invoiceTransactionDescription,
       contactId: invoice.sponsorId || invoice.studentId || undefined,
-      contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : undefined,
+      contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : invoice.otherCustomerName ? 'OTHER' : undefined,
     } as JournalLine);
 
     const invoiceLines = invoice.lines || [];
     const vatGrouped: Record<string, number> = {};
 
+    let missingRevenueAccountLine: number | null = null;
+
     invoiceLines.forEach((line, idx) => {
       const revenueAccountId =
         line.glAccountId ||
-        filteredAccounts.find(a => a.code === '4000')?.id ||
-        filteredAccounts.find(a => (a.name || '').toLowerCase().includes('tuition'))?.id ||
-        filteredAccounts.find(a => (a.name || '').toLowerCase().includes('revenue'))?.id ||
-        filteredAccounts.find(a => (a.name || '').toLowerCase().includes('income'))?.id;
+        filteredAccounts.find(a => !a.isHeader && a.code === '4000')?.id ||
+        filteredAccounts.find(a => !a.isHeader && (a.name || '').toLowerCase().includes('tuition'))?.id ||
+        filteredAccounts.find(a => !a.isHeader && (a.name || '').toLowerCase().includes('revenue'))?.id ||
+        filteredAccounts.find(a => !a.isHeader && (a.name || '').toLowerCase().includes('income'))?.id;
 
       const lineType = String((line as any).lineType || (line.courseFeeId ? 'COURSE_FEE' : 'MANUAL')).toUpperCase();
-      const numericNetAmount = Number(line.netAmount);
-      const numericGrossAmount = Number(line.grossAmount);
+      const hasExplicitNetAmount = line.netAmount !== undefined && line.netAmount !== null && String(line.netAmount).trim() !== '';
+      const hasExplicitGrossAmount = line.grossAmount !== undefined && line.grossAmount !== null && String(line.grossAmount).trim() !== '';
+      const numericNetAmount = hasExplicitNetAmount ? Number(line.netAmount) : Number.NaN;
+      const numericGrossAmount = hasExplicitGrossAmount ? Number(line.grossAmount) : Number.NaN;
       const numericVatAmount = Number(line.vatAmount || 0);
       const numericLineAmount = Number(line.amount || 0);
-      const signedNetAmount = Number.isFinite(numericNetAmount)
+      const signedNetAmount = (Number.isFinite(numericNetAmount) && (Math.abs(numericNetAmount) > 0.001 || Math.abs(numericLineAmount) <= 0.001))
         ? numericNetAmount
-        : Number.isFinite(numericGrossAmount)
+        : (Number.isFinite(numericGrossAmount) && (Math.abs(numericGrossAmount) > 0.001 || Math.abs(numericLineAmount) <= 0.001))
           ? numericGrossAmount - numericVatAmount
           : invoice.vatPricing === 'INCLUSIVE'
             ? numericLineAmount - numericVatAmount
@@ -5382,6 +5408,11 @@ export default function App() {
       const netRevenue = lineType === 'DISCOUNT'
         ? -Math.abs(signedNetAmount || numericLineAmount)
         : signedNetAmount;
+
+      if (Math.abs(netRevenue) > 0.01 && !revenueAccountId) {
+        missingRevenueAccountLine = idx + 1;
+        return;
+      }
 
       // Group VAT by Account
       if (Math.abs(line.vatAmount || 0) > 0.01) {
@@ -5409,7 +5440,7 @@ export default function App() {
           description: line.description || `Revenue: ${glRef} Line ${idx + 1}`,
           memo: line.description || `Revenue: ${glRef} Line ${idx + 1}`,
           contactId: invoice.sponsorId || invoice.studentId || undefined,
-          contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : undefined,
+          contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : invoice.otherCustomerName ? 'OTHER' : undefined,
           classificationCode: resolvedLineClassificationCode,
         } as JournalLine);
       } else if (revenueAccountId && netRevenue < 0) {
@@ -5423,11 +5454,16 @@ export default function App() {
           description: line.description || `Discount/Adjustment: ${glRef} Line ${idx + 1}`,
           memo: line.description || `Discount/Adjustment: ${glRef} Line ${idx + 1}`,
           contactId: invoice.sponsorId || invoice.studentId || undefined,
-          contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : undefined,
+          contactType: invoice.sponsorId ? 'SPONSOR' : invoice.studentId ? 'STUDENT' : invoice.otherCustomerName ? 'OTHER' : undefined,
           classificationCode: resolvedLineClassificationCode,
         } as JournalLine);
       }
     });
+
+    if (missingRevenueAccountLine !== null) {
+      handleNotify('error', `Cannot post GL: Please select an Account for line ${missingRevenueAccountLine}.`);
+      return null;
+    }
 
     // Add grouped VAT lines
     Object.entries(vatGrouped).forEach(([accountId, amount], idx) => {
@@ -5550,11 +5586,11 @@ export default function App() {
             setJournalLines(prev => prev.map(line =>
               line.id === linkedArLine.id
                 ? {
-                    ...line,
-                    ...(updatedLine as JournalLine),
-                    memo: invoiceTransactionDescription,
-                    description: invoiceTransactionDescription
-                  }
+                  ...line,
+                  ...(updatedLine as JournalLine),
+                  memo: invoiceTransactionDescription,
+                  description: invoiceTransactionDescription
+                }
                 : line
             ));
           } catch (lineSyncError) {
@@ -5575,8 +5611,8 @@ export default function App() {
           };
 
           // ── Subsidiary Ledger entries ───────────────────────────────────────
-          // Walk-in student invoice → debit student ledger
-          if (invoice.studentId && !invoice.sponsorId) {
+          // Walk-in student invoice → debit student ledger (skip for Non-Invoice Payments)
+          if (invoice.documentType !== 'NON_INVOICE_PAYMENT' && invoice.studentId && !invoice.sponsorId) {
             setStudentLedger(prev => [...prev, {
               id: `sl - ${jeId} `,
               orgId: currentOrgId,
@@ -5591,8 +5627,8 @@ export default function App() {
             } as StudentLedger]);
           }
 
-          // Sponsor invoice → distribute across enrolled students in the batch
-          if (invoice.sponsorId) {
+          // Sponsor invoice → distribute across enrolled students in the batch (skip for Non-Invoice Payments)
+          if (invoice.documentType !== 'NON_INVOICE_PAYMENT' && invoice.sponsorId) {
             const invoiceBatch = invoice.batchId ? batches.find(batch => batch.id === invoice.batchId) : undefined;
             const coveredSource = enrollments.filter(e =>
               !e.isDeleted &&
@@ -5623,11 +5659,11 @@ export default function App() {
             setStudentLedger(prev => [...prev, ...newEntries]);
           }
 
-          handleNotify('success', `Invoice ${invoice.invoiceNo} approved and posted to GL as ${glRef} `);
+          const approvedDocLabel = invoice.documentType === 'NON_INVOICE_PAYMENT' ? 'Non-Invoice Payment' : 'Invoice';
+          handleNotify('success', `${approvedDocLabel} ${invoice.invoiceNo} approved and posted to GL as ${glRef}`);
         } else {
-          // posting failed
-          handleNotify('error', 'Unable to post invoice to GL; it remains in draft status.');
-          invoice.status = existing?.status || 'DRAFT';
+          // posting failed – postInvoiceToGL / handlePostJournal already notified the specific reason
+          return false;
         }
       }
 
@@ -5855,9 +5891,9 @@ export default function App() {
     const year = new Date().getFullYear();
     // Filter payments by: current org, current year, NOT deleted
     const existingNums = payments
-      .filter(p => 
-        p.orgId === currentOrgId && 
-        !p.isDeleted && 
+      .filter(p =>
+        p.orgId === currentOrgId &&
+        !p.isDeleted &&
         p.paymentNo?.startsWith(`PAY-${year}-`)
       )
       .map(p => {
@@ -5866,15 +5902,15 @@ export default function App() {
         return Number.isFinite(n) ? n : 0;
       })
       .filter(n => n > 0);
-    
+
     const existingSet = new Set(existingNums);
     let next = existingNums.length ? Math.max(...existingNums) + 1 : 1;
-    
+
     // Ensure no duplicates in the set
     while (existingSet.has(next)) {
       next += 1;
     }
-    
+
     return `PAY-${year}-${String(next).padStart(5, '0')}`;
   };
 
@@ -5926,10 +5962,11 @@ export default function App() {
 
     const payorMatches = (
       (sourceInvoice.sponsorId || '') === (payment?.sponsorId || '') &&
-      (sourceInvoice.studentId || '') === (payment?.studentId || '')
+      (sourceInvoice.studentId || '') === (payment?.studentId || '') &&
+      String(sourceInvoice.otherCustomerName || '').trim().toLowerCase() === String(payment?.otherCustomerName || '').trim().toLowerCase()
     );
     if (!payorMatches) {
-      return `Invoice ${sourceInvoice.invoiceNo} is linked to a different payor. Select the matching sponsor or student before saving this payment.`;
+      return `Invoice ${sourceInvoice.invoiceNo} is linked to a different payor. Select the matching sponsor, student, or Other payor before saving this payment.`;
     }
 
     const conflictingPayment = getConflictingInvoiceLinkedPayment(sourceInvoiceId, excludePaymentId ?? payment?.id);
@@ -5943,12 +5980,12 @@ export default function App() {
   const handleAddPayment = async (payment: PaymentWithSource) => {
     try {
       console.info('[App] Creating payment:', payment.paymentNo);
-      
+
       // CRITICAL: Validate that payment.orgId matches current org
       // This prevents any cross-org data pollution
       if (!payment.orgId || payment.orgId !== currentOrgId) {
-        console.error('[App] Payment orgId mismatch:', { 
-          paymentOrgId: payment.orgId, 
+        console.error('[App] Payment orgId mismatch:', {
+          paymentOrgId: payment.orgId,
           currentOrgId,
           match: payment.orgId === currentOrgId
         });
@@ -6360,12 +6397,14 @@ export default function App() {
         je => je.sourceType === 'APPLICATION' && je.sourceRef === savedApplication.id && je.status === 'POSTED'
       );
       if (!savedApplicationEntry) {
-        const applDate = applicationTs.split('T')[0];
+        const applDate = (payment.paymentDate || applicationTs).split('T')[0];
         const applPeriodId = resolvePostingPeriodId(undefined, applDate);
+        const applicationGlRef = generateNextGlRef();
         const applEntry: Partial<JournalEntry> = {
           orgId: currentOrgId,
           periodId: applPeriodId,
           date: applDate,
+          glEntryNumber: applicationGlRef,
           reference: applicationJournalDetail,
           description: applicationDescription,
           status: 'POSTED',
@@ -6620,10 +6659,11 @@ export default function App() {
     const arAcct = resolveArAccountForInvoice(payment, invoice);
     const depositsAcct = customerDepositsAccount;
     if (arAcct && depositsAcct) {
+      const reversalDate = (payment.paymentDate || new Date().toISOString()).split('T')[0];
       const rvrsEntry: Partial<JournalEntry> = {
         orgId: currentOrgId,
-        periodId: invoice.periodId,
-        date: new Date().toISOString().split('T')[0],
+        periodId: resolvePostingPeriodId(invoice.periodId, reversalDate),
+        date: reversalDate,
         description: `Reversal of Payment Application for Invoice ${invoice.invoiceNo}`,
         reference: `RVRS - ${invoice.invoiceNo} -${Date.now()} `,
         status: 'POSTED',
@@ -7138,234 +7178,234 @@ export default function App() {
               {currentUser.role === 'STUDENT' && (
                 <div className="mb-8">
                   {sidebarOpen && <p className="text-[10px] text-slate-600 uppercase tracking-[0.3em] mb-4 px-4">Learner Portal</p>}
-              <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'student-portal'} onClick={() => setActiveTab('student-portal')} compact={!sidebarOpen} brandColor={brandColor} />
-            </div>
-          )}
+                  <NavItem icon={<LayoutDashboard size={20} />} label="Dashboard" active={activeTab === 'student-portal'} onClick={() => setActiveTab('student-portal')} compact={!sidebarOpen} brandColor={brandColor} />
+                </div>
+              )}
 
-          {currentUser.role === 'TRAINER' && (
-            <div className="mb-8">
-              {sidebarOpen && <p className="text-[10px] text-slate-600 uppercase tracking-[0.3em] mb-4 px-4">Instructor Portal</p>}
-              <NavItem icon={<LayoutDashboard size={20} />} label="Trainer Console" active={activeTab === 'trainer-portal'} onClick={() => setActiveTab('trainer-portal')} compact={!sidebarOpen} brandColor={brandColor} />
-            </div>
-          )}
+              {currentUser.role === 'TRAINER' && (
+                <div className="mb-8">
+                  {sidebarOpen && <p className="text-[10px] text-slate-600 uppercase tracking-[0.3em] mb-4 px-4">Instructor Portal</p>}
+                  <NavItem icon={<LayoutDashboard size={20} />} label="Trainer Console" active={activeTab === 'trainer-portal'} onClick={() => setActiveTab('trainer-portal')} compact={!sidebarOpen} brandColor={brandColor} />
+                </div>
+              )}
 
-          {currentUser.role === 'AR_SPECIALIST' && (
-            <div className="space-y-6">
-              <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<ListTodo size={18} />} label="Calendar & Tasks" active={activeTab === 'ar-calendar-tasks'} onClick={() => navigateTo('ar-calendar-tasks')} compact={!sidebarOpen} brandColor={brandColor} />
+              {currentUser.role === 'AR_SPECIALIST' && (
+                <div className="space-y-6">
+                  <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<ListTodo size={18} />} label="Calendar & Tasks" active={activeTab === 'ar-calendar-tasks'} onClick={() => navigateTo('ar-calendar-tasks')} compact={!sidebarOpen} brandColor={brandColor} />
 
-              <NavSection label="Billing & Receivables" isOpen={openSection === 'ar-billing'} onToggle={() => toggleSection('ar-billing')} compact={!sidebarOpen}>
-                <NavItem icon={<UserPlus size={18} />} label="Register Learner" active={activeTab === 'students'} onClick={() => navigateTo('students')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Users size={18} />} label="Customer List" active={activeTab === 'customers'} onClick={() => navigateTo('customers')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<FileText size={18} />} label="Invoice" active={activeTab === 'invoices'} onClick={() => navigateTo('invoices')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Banknote size={18} />} label="Non-Invoice Payments" active={activeTab === 'non-invoice-payments'} onClick={() => navigateTo('non-invoice-payments')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Wallet size={18} />} label="Payments and Applications" active={activeTab === 'payments'} onClick={() => navigateTo('payments')} compact={!sidebarOpen} brandColor={brandColor} />
-              </NavSection>
+                  <NavSection label="Billing & Receivables" isOpen={openSection === 'ar-billing'} onToggle={() => toggleSection('ar-billing')} compact={!sidebarOpen}>
+                    <NavItem icon={<UserPlus size={18} />} label="Register Learner" active={activeTab === 'students'} onClick={() => navigateTo('students')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Users size={18} />} label="Customer List" active={activeTab === 'customers'} onClick={() => navigateTo('customers')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<FileText size={18} />} label="Invoice" active={activeTab === 'invoices'} onClick={() => navigateTo('invoices')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Banknote size={18} />} label="Non-Invoice Payments" active={activeTab === 'non-invoice-payments'} onClick={() => navigateTo('non-invoice-payments')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Wallet size={18} />} label="Payments and Applications" active={activeTab === 'payments'} onClick={() => navigateTo('payments')} compact={!sidebarOpen} brandColor={brandColor} />
+                  </NavSection>
 
-              <NavSection label="Collections & Adjustments" isOpen={openSection === 'ar-collections'} onToggle={() => toggleSection('ar-collections')} compact={!sidebarOpen}>
-                <NavItem icon={<Zap size={18} />} label="Write Offs" active={activeTab === 'write-off'} onClick={() => navigateTo('write-off')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<CreditCard size={18} />} label="Credit/Debit Memo" active={activeTab === 'credit-debit-memo'} onClick={() => navigateTo('credit-debit-memo')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<RefreshCw size={18} />} label="Reclassify" active={activeTab === 'reclassify'} onClick={() => navigateTo('reclassify')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Receipt size={18} />} label="Collection Receipt" active={activeTab === 'collection-receipt'} onClick={() => navigateTo('collection-receipt')} compact={!sidebarOpen} brandColor={brandColor} />
-              </NavSection>
+                  <NavSection label="Collections & Adjustments" isOpen={openSection === 'ar-collections'} onToggle={() => toggleSection('ar-collections')} compact={!sidebarOpen}>
+                    <NavItem icon={<Zap size={18} />} label="Write Offs" active={activeTab === 'write-off'} onClick={() => navigateTo('write-off')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<CreditCard size={18} />} label="Credit/Debit Memo" active={activeTab === 'credit-debit-memo'} onClick={() => navigateTo('credit-debit-memo')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<RefreshCw size={18} />} label="Reclassify" active={activeTab === 'reclassify'} onClick={() => navigateTo('reclassify')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Receipt size={18} />} label="Collection Receipt" active={activeTab === 'collection-receipt'} onClick={() => navigateTo('collection-receipt')} compact={!sidebarOpen} brandColor={brandColor} />
+                  </NavSection>
 
-              <NavSection label="AR Reports" isOpen={openSection === 'ar-reports'} onToggle={() => toggleSection('ar-reports')} compact={!sidebarOpen}>
-                <NavItem icon={<BarChart2 size={18} />} label="Collection Report" active={activeTab === 'collection-report'} onClick={() => navigateTo('collection-report')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<PieChart size={18} />} label="Aging Report" active={activeTab === 'aging-report'} onClick={() => navigateTo('aging-report')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<FileText size={18} />} label="Statement (SOA)" active={activeTab === 'soa'} onClick={() => navigateTo('soa')} compact={!sidebarOpen} brandColor={brandColor} />
-              </NavSection>
+                  <NavSection label="AR Reports" isOpen={openSection === 'ar-reports'} onToggle={() => toggleSection('ar-reports')} compact={!sidebarOpen}>
+                    <NavItem icon={<BarChart2 size={18} />} label="Collection Report" active={activeTab === 'collection-report'} onClick={() => navigateTo('collection-report')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<PieChart size={18} />} label="Aging Report" active={activeTab === 'aging-report'} onClick={() => navigateTo('aging-report')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<FileText size={18} />} label="Statement (SOA)" active={activeTab === 'soa'} onClick={() => navigateTo('soa')} compact={!sidebarOpen} brandColor={brandColor} />
+                  </NavSection>
 
-              <NavSection label="Ledgers & Audit" isOpen={openSection === 'ar-ledgers'} onToggle={() => toggleSection('ar-ledgers')} compact={!sidebarOpen}>
-                <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'journal-vouchers'} onClick={() => navigateTo('journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<BookText size={18} />} label="Customer Ledger" active={activeTab === 'customer-ledger'} onClick={() => navigateTo('customer-ledger')} compact={!sidebarOpen} brandColor={brandColor} />
-              </NavSection>
+                  <NavSection label="Ledgers & Audit" isOpen={openSection === 'ar-ledgers'} onToggle={() => toggleSection('ar-ledgers')} compact={!sidebarOpen}>
+                    <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'journal-vouchers'} onClick={() => navigateTo('journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<BookText size={18} />} label="Customer Ledger" active={activeTab === 'customer-ledger'} onClick={() => navigateTo('customer-ledger')} compact={!sidebarOpen} brandColor={brandColor} />
+                  </NavSection>
 
-              <NavSection label="Inventory" isOpen={openSection === 'ar-inventory'} onToggle={() => toggleSection('ar-inventory')} compact={!sidebarOpen}>
-                <NavItem icon={<Package size={18} />} label="Stock Dashboard" active={activeTab === 'inventory'} onClick={() => navigateTo('inventory')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<MapPin size={18} />} label="Warehouse Locations" active={activeTab === 'warehouse-locations'} onClick={() => navigateTo('warehouse-locations')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Box size={18} />} label="Stock Items" active={activeTab === 'stock-items'} onClick={() => navigateTo('stock-items')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Layers size={18} />} label="Inventory Classes" active={activeTab === 'inventory-classes'} onClick={() => navigateTo('inventory-classes')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<FilePlus2 size={18} />} label="Opening Inventory" active={activeTab === 'opening-inventory'} onClick={() => navigateTo('opening-inventory')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Layers size={18} />} label="Stock Levels" active={activeTab === 'stock-levels'} onClick={() => navigateTo('stock-levels')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<AlertCircle size={18} />} label="Stock Adjustments" active={activeTab === 'stock-adjustments'} onClick={() => navigateTo('stock-adjustments')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<Zap size={18} />} label="Reorder Points" active={activeTab === 'reorder-points'} onClick={() => navigateTo('reorder-points')} compact={!sidebarOpen} brandColor={brandColor} />
-                <NavItem icon={<History size={18} />} label="Transactions" active={activeTab === 'inventory-transactions'} onClick={() => navigateTo('inventory-transactions')} compact={!sidebarOpen} brandColor={brandColor} />
-              </NavSection>
-            </div>
-          )}
+                  <NavSection label="Inventory" isOpen={openSection === 'ar-inventory'} onToggle={() => toggleSection('ar-inventory')} compact={!sidebarOpen}>
+                    <NavItem icon={<Package size={18} />} label="Stock Dashboard" active={activeTab === 'inventory'} onClick={() => navigateTo('inventory')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<MapPin size={18} />} label="Warehouse Locations" active={activeTab === 'warehouse-locations'} onClick={() => navigateTo('warehouse-locations')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Box size={18} />} label="Stock Items" active={activeTab === 'stock-items'} onClick={() => navigateTo('stock-items')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Layers size={18} />} label="Inventory Classes" active={activeTab === 'inventory-classes'} onClick={() => navigateTo('inventory-classes')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<FilePlus2 size={18} />} label="Opening Inventory" active={activeTab === 'opening-inventory'} onClick={() => navigateTo('opening-inventory')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Layers size={18} />} label="Stock Levels" active={activeTab === 'stock-levels'} onClick={() => navigateTo('stock-levels')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<AlertCircle size={18} />} label="Stock Adjustments" active={activeTab === 'stock-adjustments'} onClick={() => navigateTo('stock-adjustments')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<Zap size={18} />} label="Reorder Points" active={activeTab === 'reorder-points'} onClick={() => navigateTo('reorder-points')} compact={!sidebarOpen} brandColor={brandColor} />
+                    <NavItem icon={<History size={18} />} label="Transactions" active={activeTab === 'inventory-transactions'} onClick={() => navigateTo('inventory-transactions')} compact={!sidebarOpen} brandColor={brandColor} />
+                  </NavSection>
+                </div>
+              )}
 
-          {currentUser.role === 'TRAINER' && (
-            <div className="mb-8">
-              {sidebarOpen && <p className="text-[10px] text-slate-600 uppercase tracking-[0.3em] mb-4 px-4">Instructor Portal</p>}
-              <NavItem icon={<LayoutDashboard size={20} />} label="Trainer Console" active={activeTab === 'trainer-portal'} onClick={() => navigateTo('trainer-portal')} compact={!sidebarOpen} brandColor={brandColor} />
-            </div>
-          )}
+              {currentUser.role === 'TRAINER' && (
+                <div className="mb-8">
+                  {sidebarOpen && <p className="text-[10px] text-slate-600 uppercase tracking-[0.3em] mb-4 px-4">Instructor Portal</p>}
+                  <NavItem icon={<LayoutDashboard size={20} />} label="Trainer Console" active={activeTab === 'trainer-portal'} onClick={() => navigateTo('trainer-portal')} compact={!sidebarOpen} brandColor={brandColor} />
+                </div>
+              )}
 
-          {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Finance"
-              isOpen={openSection === 'financial'}
-              onToggle={() => toggleSection('financial')}
-              compact={!sidebarOpen}
-            >
-              <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
-              {userCanAccess('reports') && <NavItem icon={<PieChart size={18} />} label="Reports" active={activeTab === 'reports'} onClick={() => navigateTo('reports')} compact={!sidebarOpen} brandColor={brandColor} />}
-              <NavItem icon={<Landmark size={18} />} label="Cash Management" active={activeTab === 'banking'} onClick={() => navigateTo('banking')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Printer size={18} />} label="Check Printing" active={activeTab === 'checks'} onClick={() => navigateTo('checks')} compact={!sidebarOpen} brandColor={brandColor} />
-              {userCanAccess('ar') && <NavItem icon={<Receipt size={18} />} label="Accounts Receivable" active={activeTab === 'ar'} onClick={() => navigateTo('ar')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('ar-calendar-tasks') && <NavItem icon={<ListTodo size={18} />} label="AR Calendar & Tasks" active={activeTab === 'ar-calendar-tasks'} onClick={() => navigateTo('ar-calendar-tasks')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('revenue-recognition') && <NavItem icon={<TrendingUp size={18} />} label="Revenue Recognition" active={activeTab === 'revenue-recognition'} onClick={() => navigateTo('revenue-recognition')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('customers') && <NavItem icon={<Users size={18} />} label="Learners & Customers" active={activeTab === 'customers'} onClick={() => navigateTo('customers')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('invoices') && <NavItem icon={<FileText size={18} />} label="Invoices" active={activeTab === 'invoices'} onClick={() => navigateTo('invoices')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('non-invoice-payments') && <NavItem icon={<Banknote size={18} />} label="Non-Invoice Payments" active={activeTab === 'non-invoice-payments'} onClick={() => navigateTo('non-invoice-payments')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('payments') && <NavItem icon={<Wallet size={18} />} label="Payments and Applications" active={activeTab === 'payments'} onClick={() => navigateTo('payments')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('bank-deposits') && <NavItem icon={<ArrowDownToLine size={18} />} label="Bank Deposits" active={activeTab === 'bank-deposits'} onClick={() => navigateTo('bank-deposits')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('write-off') && <NavItem icon={<Zap size={18} />} label="AR Write Offs" active={activeTab === 'write-off'} onClick={() => navigateTo('write-off')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('credit-debit-memo') && <NavItem icon={<CreditCard size={18} />} label="AR Credit/Debit Memo" active={activeTab === 'credit-debit-memo'} onClick={() => navigateTo('credit-debit-memo')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('reclassify') && <NavItem icon={<RefreshCw size={18} />} label="AR Reclassify" active={activeTab === 'reclassify'} onClick={() => navigateTo('reclassify')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('collection-receipt') && <NavItem icon={<Receipt size={18} />} label="Collection Receipt" active={activeTab === 'collection-receipt'} onClick={() => navigateTo('collection-receipt')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('collection-report') && <NavItem icon={<BarChart2 size={18} />} label="Collection Report" active={activeTab === 'collection-report'} onClick={() => navigateTo('collection-report')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('aging-report') && <NavItem icon={<PieChart size={18} />} label="AR Aging Report" active={activeTab === 'aging-report'} onClick={() => navigateTo('aging-report')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('soa') && <NavItem icon={<FileText size={18} />} label="Statement (SOA)" active={activeTab === 'soa'} onClick={() => navigateTo('soa')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('course-fees') && <NavItem icon={<Receipt size={18} />} label="Course Fees" active={activeTab === 'course-fees'} onClick={() => navigateTo('course-fees')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('enrollments') && <NavItem icon={<UserCheck size={18} />} label="Enrollments" active={activeTab === 'enrollments'} onClick={() => navigateTo('enrollments')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('payroll') && <NavItem icon={<Briefcase size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => navigateTo('payroll')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+              {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Finance"
+                  isOpen={openSection === 'financial'}
+                  onToggle={() => toggleSection('financial')}
+                  compact={!sidebarOpen}
+                >
+                  <NavItem icon={<LayoutDashboard size={18} />} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {userCanAccess('reports') && <NavItem icon={<PieChart size={18} />} label="Reports" active={activeTab === 'reports'} onClick={() => navigateTo('reports')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  <NavItem icon={<Landmark size={18} />} label="Cash Management" active={activeTab === 'banking'} onClick={() => navigateTo('banking')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Printer size={18} />} label="Check Printing" active={activeTab === 'checks'} onClick={() => navigateTo('checks')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {userCanAccess('ar') && <NavItem icon={<Receipt size={18} />} label="Accounts Receivable" active={activeTab === 'ar'} onClick={() => navigateTo('ar')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('ar-calendar-tasks') && <NavItem icon={<ListTodo size={18} />} label="AR Calendar & Tasks" active={activeTab === 'ar-calendar-tasks'} onClick={() => navigateTo('ar-calendar-tasks')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('revenue-recognition') && <NavItem icon={<TrendingUp size={18} />} label="Revenue Recognition" active={activeTab === 'revenue-recognition'} onClick={() => navigateTo('revenue-recognition')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('customers') && <NavItem icon={<Users size={18} />} label="Learners & Customers" active={activeTab === 'customers'} onClick={() => navigateTo('customers')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('invoices') && <NavItem icon={<FileText size={18} />} label="Invoices" active={activeTab === 'invoices'} onClick={() => navigateTo('invoices')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('non-invoice-payments') && <NavItem icon={<Banknote size={18} />} label="Non-Invoice Payments" active={activeTab === 'non-invoice-payments'} onClick={() => navigateTo('non-invoice-payments')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('payments') && <NavItem icon={<Wallet size={18} />} label="Payments and Applications" active={activeTab === 'payments'} onClick={() => navigateTo('payments')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('bank-deposits') && <NavItem icon={<ArrowDownToLine size={18} />} label="Bank Deposits" active={activeTab === 'bank-deposits'} onClick={() => navigateTo('bank-deposits')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('write-off') && <NavItem icon={<Zap size={18} />} label="AR Write Offs" active={activeTab === 'write-off'} onClick={() => navigateTo('write-off')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('credit-debit-memo') && <NavItem icon={<CreditCard size={18} />} label="AR Credit/Debit Memo" active={activeTab === 'credit-debit-memo'} onClick={() => navigateTo('credit-debit-memo')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('reclassify') && <NavItem icon={<RefreshCw size={18} />} label="AR Reclassify" active={activeTab === 'reclassify'} onClick={() => navigateTo('reclassify')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('collection-receipt') && <NavItem icon={<Receipt size={18} />} label="Collection Receipt" active={activeTab === 'collection-receipt'} onClick={() => navigateTo('collection-receipt')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('collection-report') && <NavItem icon={<BarChart2 size={18} />} label="Collection Report" active={activeTab === 'collection-report'} onClick={() => navigateTo('collection-report')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('aging-report') && <NavItem icon={<PieChart size={18} />} label="AR Aging Report" active={activeTab === 'aging-report'} onClick={() => navigateTo('aging-report')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('soa') && <NavItem icon={<FileText size={18} />} label="Statement (SOA)" active={activeTab === 'soa'} onClick={() => navigateTo('soa')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('course-fees') && <NavItem icon={<Receipt size={18} />} label="Course Fees" active={activeTab === 'course-fees'} onClick={() => navigateTo('course-fees')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('enrollments') && <NavItem icon={<UserCheck size={18} />} label="Enrollments" active={activeTab === 'enrollments'} onClick={() => navigateTo('enrollments')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('payroll') && <NavItem icon={<Briefcase size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => navigateTo('payroll')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
 
-          {isAP && (
-            <NavSection
-              label="Accounts Payable"
-              isOpen={openSection === 'apOperations'}
-              onToggle={() => toggleSection('apOperations')}
-              compact={!sidebarOpen}
-            >
-              {userCanAccess('payables') && <NavItem icon={<CreditCard size={18} />} label="Bills & Payments" active={activeTab === 'payables'} onClick={() => navigateTo('payables')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('ap-memos') && <NavItem icon={<FilePenLine size={18} />} label="Credit/Debit Memos" active={activeTab === 'ap-memos'} onClick={() => navigateTo('ap-memos')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('ap-reclassifications') && <NavItem icon={<RefreshCw size={18} />} label="AP Reclassifications" active={activeTab === 'ap-reclassifications'} onClick={() => navigateTo('ap-reclassifications')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('time-expenses') && <NavItem icon={<ReceiptText size={18} />} label="Time & Expenses" active={activeTab === 'time-expenses'} onClick={() => navigateTo('time-expenses')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && userCanAccess('ap-journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'ap-journal-vouchers'} onClick={() => navigateTo('ap-journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && userCanAccess('ledger') && <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+              {isAP && (
+                <NavSection
+                  label="Accounts Payable"
+                  isOpen={openSection === 'apOperations'}
+                  onToggle={() => toggleSection('apOperations')}
+                  compact={!sidebarOpen}
+                >
+                  {userCanAccess('payables') && <NavItem icon={<CreditCard size={18} />} label="Bills & Payments" active={activeTab === 'payables'} onClick={() => navigateTo('payables')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('ap-memos') && <NavItem icon={<FilePenLine size={18} />} label="Credit/Debit Memos" active={activeTab === 'ap-memos'} onClick={() => navigateTo('ap-memos')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('ap-reclassifications') && <NavItem icon={<RefreshCw size={18} />} label="AP Reclassifications" active={activeTab === 'ap-reclassifications'} onClick={() => navigateTo('ap-reclassifications')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('time-expenses') && <NavItem icon={<ReceiptText size={18} />} label="Time & Expenses" active={activeTab === 'time-expenses'} onClick={() => navigateTo('time-expenses')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && userCanAccess('ap-journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'ap-journal-vouchers'} onClick={() => navigateTo('ap-journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && userCanAccess('ledger') && <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
 
-          {isFinance && currentUser.role !== 'AR_SPECIALIST' && !['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && (
-            <NavSection
-              label="Ledger & Audit"
-              isOpen={openSection === 'ledgerAudit'}
-              onToggle={() => toggleSection('ledgerAudit')}
-              compact={!sidebarOpen}
-            >
-              {userCanAccess('ledger') && <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'journal-vouchers'} onClick={() => navigateTo('journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('ap-journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="AP Journal Vouchers" active={activeTab === 'ap-journal-vouchers'} onClick={() => navigateTo('ap-journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('customer-ledger') && <NavItem icon={<BookText size={18} />} label="Customer Ledger" active={activeTab === 'customer-ledger'} onClick={() => navigateTo('customer-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('vendor-ledger') && <NavItem icon={<BookOpen size={18} />} label="Vendor Ledger" active={activeTab === 'vendor-ledger'} onClick={() => navigateTo('vendor-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+              {isFinance && currentUser.role !== 'AR_SPECIALIST' && !['AP_SPECIALIST', 'AP_CLERK', 'AP_SUPERVISOR'].includes(currentUser.role) && (
+                <NavSection
+                  label="Ledger & Audit"
+                  isOpen={openSection === 'ledgerAudit'}
+                  onToggle={() => toggleSection('ledgerAudit')}
+                  compact={!sidebarOpen}
+                >
+                  {userCanAccess('ledger') && <NavItem icon={<BookText size={18} />} label="Journal Entries" active={activeTab === 'ledger'} onClick={() => navigateTo('ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="Journal Vouchers" active={activeTab === 'journal-vouchers'} onClick={() => navigateTo('journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('ap-journal-vouchers') && <NavItem icon={<ClipboardCheck size={18} />} label="AP Journal Vouchers" active={activeTab === 'ap-journal-vouchers'} onClick={() => navigateTo('ap-journal-vouchers')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('customer-ledger') && <NavItem icon={<BookText size={18} />} label="Customer Ledger" active={activeTab === 'customer-ledger'} onClick={() => navigateTo('customer-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('vendor-ledger') && <NavItem icon={<BookOpen size={18} />} label="Vendor Ledger" active={activeTab === 'vendor-ledger'} onClick={() => navigateTo('vendor-ledger')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
 
-          {isAP && userCanAccess('ap-aging-report') && (
-            <NavSection
-              label="AP Reports"
-              isOpen={openSection === 'apReports'}
-              onToggle={() => toggleSection('apReports')}
-              compact={!sidebarOpen}
-            >
-              <NavItem icon={<BarChart2 size={18} />} label="AP AGING REPORT" active={activeTab === 'ap-aging-report'} onClick={() => navigateTo('ap-aging-report')} compact={!sidebarOpen} brandColor={brandColor} />
-            </NavSection>
-          )}
+              {isAP && userCanAccess('ap-aging-report') && (
+                <NavSection
+                  label="AP Reports"
+                  isOpen={openSection === 'apReports'}
+                  onToggle={() => toggleSection('apReports')}
+                  compact={!sidebarOpen}
+                >
+                  <NavItem icon={<BarChart2 size={18} />} label="AP AGING REPORT" active={activeTab === 'ap-aging-report'} onClick={() => navigateTo('ap-aging-report')} compact={!sidebarOpen} brandColor={brandColor} />
+                </NavSection>
+              )}
 
-          {isRegistrar && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Operations"
-              isOpen={openSection === 'operations'}
-              onToggle={() => toggleSection('operations')}
-              compact={!sidebarOpen}
-            >
-              <NavItem icon={<LayoutDashboard size={20} />} label="Registrar Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Users size={20} />} label="Learners" active={activeTab === 'students'} onClick={() => navigateTo('students')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<GraduationCap size={20} />} label="Trainers" active={activeTab === 'trainers'} onClick={() => navigateTo('trainers')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Award size={20} />} label="Qualifications" active={activeTab === 'qualifications'} onClick={() => navigateTo('qualifications')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Layers size={20} />} label="Training Batches" active={activeTab === 'batches'} onClick={() => navigateTo('batches')} compact={!sidebarOpen} brandColor={brandColor} />
-              {userCanAccess('enrollments') && <NavItem icon={<UserCheck size={20} />} label="Enrollments" active={activeTab === 'enrollments'} onClick={() => navigateTo('enrollments')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('assessment-registrations') && <NavItem icon={<ClipboardCheck size={20} />} label="Assessment Registrations" active={activeTab === 'assessment-registrations'} onClick={() => navigateTo('assessment-registrations')} compact={!sidebarOpen} brandColor={brandColor} />}
-              <NavItem icon={<MapPin size={20} />} label="Locations" active={activeTab === 'locations'} onClick={() => navigateTo('locations')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<CalendarClock size={20} />} label="Scheduling" active={activeTab === 'schedules'} onClick={() => navigateTo('schedules')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<UserCheck size={20} />} label="Alumni Reports" active={activeTab === 'alumni-reports'} onClick={() => navigateTo('alumni-reports')} compact={!sidebarOpen} brandColor={brandColor} />
-              {userCanAccess('transcripts') && <NavItem icon={<FileText size={20} />} label="Transcript of Records" active={activeTab === 'transcripts'} onClick={() => navigateTo('transcripts')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+              {isRegistrar && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Operations"
+                  isOpen={openSection === 'operations'}
+                  onToggle={() => toggleSection('operations')}
+                  compact={!sidebarOpen}
+                >
+                  <NavItem icon={<LayoutDashboard size={20} />} label="Registrar Dashboard" active={activeTab === 'dashboard'} onClick={() => navigateTo('dashboard')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Users size={20} />} label="Learners" active={activeTab === 'students'} onClick={() => navigateTo('students')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<GraduationCap size={20} />} label="Trainers" active={activeTab === 'trainers'} onClick={() => navigateTo('trainers')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Award size={20} />} label="Qualifications" active={activeTab === 'qualifications'} onClick={() => navigateTo('qualifications')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Layers size={20} />} label="Training Batches" active={activeTab === 'batches'} onClick={() => navigateTo('batches')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {userCanAccess('enrollments') && <NavItem icon={<UserCheck size={20} />} label="Enrollments" active={activeTab === 'enrollments'} onClick={() => navigateTo('enrollments')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('assessment-registrations') && <NavItem icon={<ClipboardCheck size={20} />} label="Assessment Registrations" active={activeTab === 'assessment-registrations'} onClick={() => navigateTo('assessment-registrations')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  <NavItem icon={<MapPin size={20} />} label="Locations" active={activeTab === 'locations'} onClick={() => navigateTo('locations')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<CalendarClock size={20} />} label="Scheduling" active={activeTab === 'schedules'} onClick={() => navigateTo('schedules')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<UserCheck size={20} />} label="Alumni Reports" active={activeTab === 'alumni-reports'} onClick={() => navigateTo('alumni-reports')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {userCanAccess('transcripts') && <NavItem icon={<FileText size={20} />} label="Transcript of Records" active={activeTab === 'transcripts'} onClick={() => navigateTo('transcripts')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
 
-          {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Registries"
-              isOpen={openSection === 'registries'}
-              onToggle={() => toggleSection('registries')}
-              compact={!sidebarOpen}
-            >
-              {userCanAccess('sponsors') && <NavItem icon={<Handshake size={20} />} label="Sponsors" active={activeTab === 'sponsors'} onClick={() => navigateTo('sponsors')} compact={!sidebarOpen} brandColor={brandColor} />}
-              <NavItem icon={<Truck size={20} />} label="VENDORS LIST" active={activeTab === 'vendors'} onClick={() => navigateTo('vendors')} compact={!sidebarOpen} brandColor={brandColor} />
-            </NavSection>
-          )}
+              {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Registries"
+                  isOpen={openSection === 'registries'}
+                  onToggle={() => toggleSection('registries')}
+                  compact={!sidebarOpen}
+                >
+                  {userCanAccess('sponsors') && <NavItem icon={<Handshake size={20} />} label="Sponsors" active={activeTab === 'sponsors'} onClick={() => navigateTo('sponsors')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  <NavItem icon={<Truck size={20} />} label="VENDORS LIST" active={activeTab === 'vendors'} onClick={() => navigateTo('vendors')} compact={!sidebarOpen} brandColor={brandColor} />
+                </NavSection>
+              )}
 
-          {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Purchases"
-              isOpen={openSection === 'purchases'}
-              onToggle={() => toggleSection('purchases')}
-              compact={!sidebarOpen}
-            >
-              {userCanAccess('po') && <NavItem icon={<ShoppingCart size={20} />} label="Purchase Orders" active={activeTab === 'po'} onClick={() => navigateTo('po')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('goods-receipt') && <NavItem icon={<Package size={20} />} label="Goods Receipt" active={activeTab === 'goods-receipt'} onClick={() => navigateTo('goods-receipt')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('items') && <NavItem icon={<Tag size={20} />} label="Item Catalog (Non-Stock)" active={activeTab === 'items'} onClick={() => navigateTo('items')} compact={!sidebarOpen} brandColor={brandColor} />}
-              {userCanAccess('assets') && <NavItem icon={<Box size={20} />} label="Fixed Assets" active={activeTab === 'assets'} onClick={() => navigateTo('assets')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+              {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Purchases"
+                  isOpen={openSection === 'purchases'}
+                  onToggle={() => toggleSection('purchases')}
+                  compact={!sidebarOpen}
+                >
+                  {userCanAccess('po') && <NavItem icon={<ShoppingCart size={20} />} label="Purchase Orders" active={activeTab === 'po'} onClick={() => navigateTo('po')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('goods-receipt') && <NavItem icon={<Package size={20} />} label="Goods Receipt" active={activeTab === 'goods-receipt'} onClick={() => navigateTo('goods-receipt')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('items') && <NavItem icon={<Tag size={20} />} label="Item Catalog (Non-Stock)" active={activeTab === 'items'} onClick={() => navigateTo('items')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  {userCanAccess('assets') && <NavItem icon={<Box size={20} />} label="Fixed Assets" active={activeTab === 'assets'} onClick={() => navigateTo('assets')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
 
-          {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Inventory"
-              isOpen={openSection === 'inventory'}
-              onToggle={() => toggleSection('inventory')}
-              compact={!sidebarOpen}
-            >
-              <NavItem icon={<Package size={20} />} label="Stock Dashboard" active={activeTab === 'inventory'} onClick={() => navigateTo('inventory')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<MapPin size={20} />} label="Warehouse Locations" active={activeTab === 'warehouse-locations'} onClick={() => navigateTo('warehouse-locations')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Box size={20} />} label="Stock Items" active={activeTab === 'stock-items'} onClick={() => navigateTo('stock-items')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Layers size={20} />} label="Inventory Classes" active={activeTab === 'inventory-classes'} onClick={() => navigateTo('inventory-classes')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<FilePlus2 size={20} />} label="Opening Inventory" active={activeTab === 'opening-inventory'} onClick={() => navigateTo('opening-inventory')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Layers size={20} />} label="Stock Levels" active={activeTab === 'stock-levels'} onClick={() => navigateTo('stock-levels')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<AlertCircle size={20} />} label="Stock Adjustments" active={activeTab === 'stock-adjustments'} onClick={() => navigateTo('stock-adjustments')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Zap size={20} />} label="Reorder Points" active={activeTab === 'reorder-points'} onClick={() => navigateTo('reorder-points')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<History size={20} />} label="Transactions" active={activeTab === 'inventory-transactions'} onClick={() => navigateTo('inventory-transactions')} compact={!sidebarOpen} brandColor={brandColor} />
-            </NavSection>
-          )}
+              {isFinance && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Inventory"
+                  isOpen={openSection === 'inventory'}
+                  onToggle={() => toggleSection('inventory')}
+                  compact={!sidebarOpen}
+                >
+                  <NavItem icon={<Package size={20} />} label="Stock Dashboard" active={activeTab === 'inventory'} onClick={() => navigateTo('inventory')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<MapPin size={20} />} label="Warehouse Locations" active={activeTab === 'warehouse-locations'} onClick={() => navigateTo('warehouse-locations')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Box size={20} />} label="Stock Items" active={activeTab === 'stock-items'} onClick={() => navigateTo('stock-items')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Layers size={20} />} label="Inventory Classes" active={activeTab === 'inventory-classes'} onClick={() => navigateTo('inventory-classes')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<FilePlus2 size={20} />} label="Opening Inventory" active={activeTab === 'opening-inventory'} onClick={() => navigateTo('opening-inventory')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Layers size={20} />} label="Stock Levels" active={activeTab === 'stock-levels'} onClick={() => navigateTo('stock-levels')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<AlertCircle size={20} />} label="Stock Adjustments" active={activeTab === 'stock-adjustments'} onClick={() => navigateTo('stock-adjustments')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Zap size={20} />} label="Reorder Points" active={activeTab === 'reorder-points'} onClick={() => navigateTo('reorder-points')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<History size={20} />} label="Transactions" active={activeTab === 'inventory-transactions'} onClick={() => navigateTo('inventory-transactions')} compact={!sidebarOpen} brandColor={brandColor} />
+                </NavSection>
+              )}
 
-          {isAdmin && currentUser.role !== 'AR_SPECIALIST' && (
-            <NavSection
-              label="Administration"
-              isOpen={openSection === 'administration'}
-              onToggle={() => toggleSection('administration')}
-              compact={!sidebarOpen}
-            >
-              <NavItem icon={<Users size={20} />} label="Employees" active={activeTab === 'employees'} onClick={() => navigateTo('employees')} compact={!sidebarOpen} brandColor={brandColor} />
-              {userCanAccess('employee-directory') && <NavItem icon={<UserCheck size={20} />} label="Employee Directory" active={activeTab === 'employee-directory'} onClick={() => navigateTo('employee-directory')} compact={!sidebarOpen} brandColor={brandColor} />}
-              <NavItem icon={<Settings size={20} />} label="G/L Setup (COA)" active={activeTab === 'coa'} onClick={() => navigateTo('coa')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<CalendarCheck size={20} />} label="Period Closing" active={activeTab === 'periods'} onClick={() => navigateTo('periods')} compact={!sidebarOpen} brandColor={brandColor} />
-              <NavItem icon={<Palette size={20} />} label="Branding & Motif" active={activeTab === 'branding'} onClick={() => navigateTo('branding')} compact={!sidebarOpen} brandColor={brandColor} />
-              <div className="relative">
-                <NavItem icon={<CreditCard size={20} />} label="Payment History" active={activeTab === 'payment-history'} onClick={() => navigateTo('payment-history')} compact={!sidebarOpen} brandColor={brandColor} />
-                {paymentsDueSoon.length > 0 && (
-                  <div className="absolute top-2 right-2 bg-rose-500 text-white text-[9px] font-black px-2 py-1 rounded-full">
-                    {paymentsDueSoon.length}
+              {isAdmin && currentUser.role !== 'AR_SPECIALIST' && (
+                <NavSection
+                  label="Administration"
+                  isOpen={openSection === 'administration'}
+                  onToggle={() => toggleSection('administration')}
+                  compact={!sidebarOpen}
+                >
+                  <NavItem icon={<Users size={20} />} label="Employees" active={activeTab === 'employees'} onClick={() => navigateTo('employees')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {userCanAccess('employee-directory') && <NavItem icon={<UserCheck size={20} />} label="Employee Directory" active={activeTab === 'employee-directory'} onClick={() => navigateTo('employee-directory')} compact={!sidebarOpen} brandColor={brandColor} />}
+                  <NavItem icon={<Settings size={20} />} label="G/L Setup (COA)" active={activeTab === 'coa'} onClick={() => navigateTo('coa')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<CalendarCheck size={20} />} label="Period Closing" active={activeTab === 'periods'} onClick={() => navigateTo('periods')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <NavItem icon={<Palette size={20} />} label="Branding & Motif" active={activeTab === 'branding'} onClick={() => navigateTo('branding')} compact={!sidebarOpen} brandColor={brandColor} />
+                  <div className="relative">
+                    <NavItem icon={<CreditCard size={20} />} label="Payment History" active={activeTab === 'payment-history'} onClick={() => navigateTo('payment-history')} compact={!sidebarOpen} brandColor={brandColor} />
+                    {paymentsDueSoon.length > 0 && (
+                      <div className="absolute top-2 right-2 bg-rose-500 text-white text-[9px] font-black px-2 py-1 rounded-full">
+                        {paymentsDueSoon.length}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <NavItem icon={<UserCog size={20} />} label="Security/RBAC" active={activeTab === 'users'} onClick={() => navigateTo('users')} compact={!sidebarOpen} brandColor={brandColor} />
-              {canViewAuditTrail && <NavItem icon={<History size={20} />} label="Audit Trail" active={activeTab === 'audit'} onClick={() => navigateTo('audit')} compact={!sidebarOpen} brandColor={brandColor} />}
-            </NavSection>
-          )}
+                  <NavItem icon={<UserCog size={20} />} label="Security/RBAC" active={activeTab === 'users'} onClick={() => navigateTo('users')} compact={!sidebarOpen} brandColor={brandColor} />
+                  {canViewAuditTrail && <NavItem icon={<History size={20} />} label="Audit Trail" active={activeTab === 'audit'} onClick={() => navigateTo('audit')} compact={!sidebarOpen} brandColor={brandColor} />}
+                </NavSection>
+              )}
             </>
           )}
 
@@ -7450,11 +7490,10 @@ export default function App() {
                 onClick={() => navigateTo('profile')}
                 title="Profile"
                 aria-label="Profile"
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
-                  activeTab === 'profile'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors ${activeTab === 'profile'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
               >
                 <UserCircle size={16} />
               </button>
@@ -7464,11 +7503,10 @@ export default function App() {
                   onClick={() => navigateTo('feedback')}
                   title={isSysAdmin ? 'Users Feedback' : 'Feedback Ticket'}
                   aria-label={isSysAdmin ? 'Users Feedback' : 'Feedback Ticket'}
-                  className={`inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
-                    activeTab === 'feedback'
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
+                  className={`inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors ${activeTab === 'feedback'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                    }`}
                 >
                   <MessageSquare size={16} />
                 </button>
@@ -7524,607 +7562,607 @@ export default function App() {
             </div>
           ) : (
             <>
-          {/* View Router (unchanged) */}
-          {activeTab === 'profile' && currentUser && (
-            <UserProfileView
-              currentUser={currentUser}
-              brandColor={brandColor}
-              onUpdateProfile={handleUpdateCurrentUserProfile}
-            />
-          )}
+              {/* View Router (unchanged) */}
+              {activeTab === 'profile' && currentUser && (
+                <UserProfileView
+                  currentUser={currentUser}
+                  brandColor={brandColor}
+                  onUpdateProfile={handleUpdateCurrentUserProfile}
+                />
+              )}
 
-          {activeTab === 'student-portal' && currentUser.studentId && (
-            <StudentPortalView
-              student={students.find(s => s.id === currentUser.studentId)!}
-              batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-              qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-              trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)}
-              locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)}
-              schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              entries={activeJournalEntries}
-              lines={journalLines}
-              brandColor={brandColor}
-              onUpdateStudent={handleUpdateStudent}
-            />
-          )}
+              {activeTab === 'student-portal' && currentUser.studentId && (
+                <StudentPortalView
+                  student={students.find(s => s.id === currentUser.studentId)!}
+                  batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                  qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                  trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)}
+                  locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)}
+                  schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={journalLines}
+                  brandColor={brandColor}
+                  onUpdateStudent={handleUpdateStudent}
+                />
+              )}
 
-          {activeTab === 'trainer-portal' && currentUser.trainerId && (
-            <TrainerPortalView
-              trainer={trainers.find(t => t.id === currentUser.trainerId)!}
-              batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-              qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-              locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)}
-              schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              brandColor={brandColor}
-              onUpdateTrainer={handleUpdateTrainer}
-            />
-          )}
+              {activeTab === 'trainer-portal' && currentUser.trainerId && (
+                <TrainerPortalView
+                  trainer={trainers.find(t => t.id === currentUser.trainerId)!}
+                  batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                  qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                  locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)}
+                  schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  brandColor={brandColor}
+                  onUpdateTrainer={handleUpdateTrainer}
+                />
+              )}
 
-          {activeTab === 'dashboard' && (
-            <Dashboard
-              summaries={summaries}
-              currency={currentOrg?.currency}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              currentUser={currentUser}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              sponsors={sponsors.filter(sp => sp.orgId === currentOrgId && !sp.isDeleted)}
-              batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-              qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-              entries={activeJournalEntries}
-              enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
-              payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-              invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-            />
-          )}
-          {activeTab === 'ar-calendar-tasks' && (
-            <ARCalendarTasksView
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-              currentUser={currentUser}
-              brandColor={brandColor}
-              onNotify={handleNotify}
-            />
-          )}
-          {activeTab === 'ledger' && userCanAccess('ledger') && <Ledger orgId={currentOrgId} accounts={filteredAccounts} entries={activeJournalEntries} lines={filteredLines} invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)} payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)} students={students} sponsors={sponsors} trainers={trainers} batches={batches} items={items} qualifications={qualifications} users={users} onPostEntry={handleSaveOrPostJournal} onApproveJournal={handleApproveJournal} onReverseJournal={reverseJournalEntry} currentUser={currentUser} initialSearchTerm={ledgerSearchTerm} />}
-          {activeTab === 'journal-vouchers' && (
-            <JournalVouchersView
-              orgId={currentOrgId}
-              accounts={filteredAccounts}
-              periods={accountingPeriods}
-              users={users}
-              currentUser={currentUser}
-              brandColor={brandColor}
-              onNotify={handleNotify}
-              onNavigate={target => navigateTo(target)}
-              onPosted={async () => {
+              {activeTab === 'dashboard' && (
+                <Dashboard
+                  summaries={summaries}
+                  currency={currentOrg?.currency}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  currentUser={currentUser}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  sponsors={sponsors.filter(sp => sp.orgId === currentOrgId && !sp.isDeleted)}
+                  batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                  qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                  entries={activeJournalEntries}
+                  enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
+                  payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                  invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                />
+              )}
+              {activeTab === 'ar-calendar-tasks' && (
+                <ARCalendarTasksView
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                  currentUser={currentUser}
+                  brandColor={brandColor}
+                  onNotify={handleNotify}
+                />
+              )}
+              {activeTab === 'ledger' && userCanAccess('ledger') && <Ledger orgId={currentOrgId} accounts={filteredAccounts} entries={activeJournalEntries} lines={filteredLines} invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)} payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)} students={students} sponsors={sponsors} trainers={trainers} batches={batches} items={items} qualifications={qualifications} users={users} onPostEntry={handleSaveOrPostJournal} onApproveJournal={handleApproveJournal} onReverseJournal={reverseJournalEntry} currentUser={currentUser} initialSearchTerm={ledgerSearchTerm} />}
+              {activeTab === 'journal-vouchers' && (
+                <JournalVouchersView
+                  orgId={currentOrgId}
+                  accounts={filteredAccounts}
+                  periods={accountingPeriods}
+                  users={users}
+                  currentUser={currentUser}
+                  brandColor={brandColor}
+                  onNotify={handleNotify}
+                  onNavigate={target => navigateTo(target)}
+                  onPosted={async () => {
+                    const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
+                    const refreshedLineGroups = await Promise.all(
+                      refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id))
+                    );
+                    setJournalEntries(refreshedEntries);
+                    setJournalLines(refreshedLineGroups.flat());
+                  }}
+                />
+              )}
+              {activeTab === 'ap-journal-vouchers' && userCanAccess('ap-journal-vouchers') && (
+                <APJournalVouchersView
+                  orgId={currentOrgId}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  payables={payables.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                  taxCategories={taxCategories.filter(category => category.orgId === currentOrgId && !category.isDeleted)}
+                  vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency}
+                />
+              )}
+              {activeTab === 'vendor-ledger' && userCanAccess('vendor-ledger') && (
+                <VendorLedgerView
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency}
+                />
+              )}
+              {activeTab === 'reports' && userCanAccess('reports') && <Reports orgId={currentOrgId} summaries={summaries} accounts={filteredAccounts} entries={postedJournalEntries} lines={postedLines} qualifications={qualifications} batches={batches} orgName={currentOrg?.name} currency={currentOrg?.currency} logoUrl={currentOrg?.logoUrl} />}
+              {activeTab === 'collection-report' && (
+                <ARCollectionReportView
+                  payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                  orgName={currentOrg?.name}
+                  preparedBy="AR Specialist"
+                  onViewJournal={handleViewJournal}
+                />
+              )}
+
+              {activeTab === 'ar' && <ARView
+                entries={activeJournalEntries}
+                lines={filteredLines}
+                students={students.filter(student => student.orgId === currentOrgId && !student.isDeleted)}
+                sponsors={sponsors.filter(sponsor => sponsor.orgId === currentOrgId && !sponsor.isDeleted)}
+                items={items.filter(item => item.orgId === currentOrgId && !item.isDeleted)}
+                itemGroups={itemGroups.filter(group => group.orgId === currentOrgId && !group.isDeleted)}
+                accounts={filteredAccounts}
+                bankAccounts={bankAccounts.filter(account => account.orgId === currentOrgId && !account.isDeleted)}
+                batches={batches.filter(batch => batch.orgId === currentOrgId && !batch.isDeleted)}
+                qualifications={qualifications.filter(qualification => qualification.orgId === currentOrgId && !qualification.isDeleted)}
+                courseFees={courseFees.filter(fee => fee.orgId === currentOrgId && !fee.isDeleted)}
+                enrollments={enrollments.filter(enrollment => enrollment.orgId === currentOrgId && !enrollment.isDeleted)}
+                taxCategories={taxCategories.filter(category => category.orgId === currentOrgId && !category.isDeleted)}
+                onPostInvoice={handlePostJournal}
+                onApproveInvoice={handleApproveJournal}
+                currentUser={currentUser}
+                onNotify={handleNotify}
+                orgId={currentOrgId}
+              />}
+              {activeTab === 'revenue-recognition' && <RevenueRecognitionView orgId={currentOrgId} currency={currentOrg?.currency || 'USD'} schedules={revenueSchedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} entries={revenueRecognitionEntries.filter(e => e.orgId === currentOrgId)} customers={[...students.map(s => ({ id: s.id, name: `${s.firstName} ${s.lastName} ` })), ...sponsors.map(sp => ({ id: sp.id, name: sp.name }))]} accounts={filteredAccounts} onCreateSchedule={handleAddRevenueSchedule} onUpdateSchedule={handleUpdateRevenueSchedule} onDeleteSchedule={handleDeleteRevenueSchedule} onCreateEntry={handleAddRevenueRecognitionEntry} onUpdateEntry={handleUpdateRevenueRecognitionEntry} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
+              {activeTab === 'ap' && <APView orgId={currentOrgId} payables={payables} checks={checkVouchers} purchaseOrders={purchaseOrders} purchaseOrderLines={purchaseOrderLines} goodsReceipts={goodsReceipts} goodsReceiptLines={goodsReceiptLines} vendors={vendors} accounts={filteredAccounts} entries={activeJournalEntries} items={items} lines={filteredLines} bankAccounts={bankAccounts} currentUserId={currentUser?.id} recurringBills={recurringBills} recurringBillHistory={recurringBillHistory} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onApproveException={handleApproveException} onPostBill={handlePostJournal} onCreateRecurringBill={(bill) => setRecurringBills(prev => [...prev, { ...bill, id: Date.now().toString() } as RecurringBill])} onUpdateRecurringBill={(id, updates) => setRecurringBills(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b))} onDeleteRecurringBill={(id) => setRecurringBills(prev => prev.filter(b => b.id !== id))} onNotify={handleNotify} />}
+              {activeTab === 'payables' && userCanAccess('payables') && <PayablesView orgId={currentOrgId} payables={payables} vendors={vendors} accounts={filteredAccounts} qualifications={qualifications} taxCategories={taxCategories} entries={activeJournalEntries} bankAccounts={bankAccounts} vendorTaxSettings={vendorTaxSettings} atcCategories={atcCategories} atcItems={atcItems} atcRates={atcRates} employees={users.filter(user => user.orgId === currentOrgId && user.role !== 'SYSTEM_ADMIN' && user.role !== 'STUDENT' && !user.isDeleted)} currentUserId={currentUser?.id} canCreate={canPerformAction(currentUser?.role, 'payables', 'create')} canEdit={canPerformAction(currentUser?.role, 'payables', 'edit')} canDelete={canPerformAction(currentUser?.role, 'payables', 'delete')} canApprove={canPerformAction(currentUser?.role, 'payables', 'approve')} canPay={canPerformAction(currentUser?.role, 'payables', 'post')} canCancel={canPerformAction(currentUser?.role, 'payables', 'void')} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onPostJournal={handlePostJournal} onJournalChanged={async () => {
                 const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
-                const refreshedLineGroups = await Promise.all(
-                  refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id))
-                );
+                const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
                 setJournalEntries(refreshedEntries);
                 setJournalLines(refreshedLineGroups.flat());
-              }}
-            />
-          )}
-          {activeTab === 'ap-journal-vouchers' && userCanAccess('ap-journal-vouchers') && (
-            <APJournalVouchersView
-              orgId={currentOrgId}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              payables={payables.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-              taxCategories={taxCategories.filter(category => category.orgId === currentOrgId && !category.isDeleted)}
-              vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency}
-            />
-          )}
-          {activeTab === 'vendor-ledger' && userCanAccess('vendor-ledger') && (
-            <VendorLedgerView
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency}
-            />
-          )}
-          {activeTab === 'reports' && userCanAccess('reports') && <Reports orgId={currentOrgId} summaries={summaries} accounts={filteredAccounts} entries={postedJournalEntries} lines={postedLines} qualifications={qualifications} batches={batches} orgName={currentOrg?.name} currency={currentOrg?.currency} logoUrl={currentOrg?.logoUrl} />}
-          {activeTab === 'collection-report' && (
-            <ARCollectionReportView
-              payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-              orgName={currentOrg?.name}
-              preparedBy="AR Specialist"
-              onViewJournal={handleViewJournal}
-            />
-          )}
+              }} onNotify={handleNotify} />}
+              {activeTab === 'ap-memos' && userCanAccess('ap-memos') && currentUser?.id && <APMemosView orgId={currentOrgId} payables={payables} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} currentUserId={currentUser.id} currentUserName={currentUser.name || currentUser.email} currentUserRole={currentUser.role} currency={currentOrg?.currency || 'PHP'} brandColor={brandColor} onNotify={handleNotify} />}
+              {activeTab === 'ap-reclassifications' && userCanAccess('ap-reclassifications') && currentUser?.id && <APReclassificationsView orgId={currentOrgId} payables={payables} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} entries={activeJournalEntries} lines={filteredLines} currentUserId={currentUser.id} currentUserRole={currentUser.role} currency={currentOrg?.currency || 'PHP'} onNotify={handleNotify} onJournalChanged={async () => {
+                const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
+                const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
+                setJournalEntries(refreshedEntries);
+                setJournalLines(refreshedLineGroups.flat());
+              }} />}
+              {activeTab === 'time-expenses' && userCanAccess('time-expenses') && <TimeExpensesView orgId={currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId || ''} payables={payables} vendors={vendors.filter(v => v.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !v.isDeleted)} accounts={filteredAccounts} qualifications={qualifications.filter(q => q.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !q.isDeleted)} taxCategories={taxCategories.filter(tc => tc.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !tc.isDeleted)} employees={users.filter(user => user.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && user.role !== 'SYSTEM_ADMIN' && user.role !== 'STUDENT' && !user.isDeleted)} currency={currentOrg?.currency || 'PHP'} currentUserId={currentUser?.id} onCreatePayable={handleAddPayable} onNotify={handleNotify} />}
+              {activeTab === 'ap-aging-report' && userCanAccess('ap-aging-report') && <PayablesView view="aging" orgId={currentOrgId} payables={payables} vendors={vendors} accounts={filteredAccounts} qualifications={qualifications} taxCategories={taxCategories} entries={activeJournalEntries} bankAccounts={bankAccounts} vendorTaxSettings={vendorTaxSettings} atcCategories={atcCategories} atcItems={atcItems} atcRates={atcRates} currentUserId={currentUser?.id} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onPostJournal={handlePostJournal} onJournalChanged={async () => {
+                const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
+                const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
+                setJournalEntries(refreshedEntries);
+                setJournalLines(refreshedLineGroups.flat());
+              }} onNotify={handleNotify} />}
+              {activeTab === 'po' && <PurchaseOrdersView orgId={currentOrgId} purchaseOrders={purchaseOrders} vendors={vendors} items={items} onCreatePO={handleAddPurchaseOrder} onUpdateStatus={handleUpdatePurchaseOrderStatus} onConvertToBill={handleConvertToBill} />}
+              {activeTab === 'goods-receipt' && <GoodsReceiptView orgId={currentOrgId} goodsReceipts={goodsReceipts} purchaseOrders={purchaseOrders.filter(po => po.orgId === currentOrgId)} vendors={vendors} accounts={filteredAccounts} currentUserId={currentUser?.id} onCreateGoodsReceipt={handleAddGoodsReceipt} onUpdateGoodsReceipt={handleUpdateGoodsReceipt} onDeleteGoodsReceipt={handleDeleteGoodsReceipt} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
 
-          {activeTab === 'ar' && <ARView
-            entries={activeJournalEntries}
-            lines={filteredLines}
-            students={students.filter(student => student.orgId === currentOrgId && !student.isDeleted)}
-            sponsors={sponsors.filter(sponsor => sponsor.orgId === currentOrgId && !sponsor.isDeleted)}
-            items={items.filter(item => item.orgId === currentOrgId && !item.isDeleted)}
-            itemGroups={itemGroups.filter(group => group.orgId === currentOrgId && !group.isDeleted)}
-            accounts={filteredAccounts}
-            bankAccounts={bankAccounts.filter(account => account.orgId === currentOrgId && !account.isDeleted)}
-            batches={batches.filter(batch => batch.orgId === currentOrgId && !batch.isDeleted)}
-            qualifications={qualifications.filter(qualification => qualification.orgId === currentOrgId && !qualification.isDeleted)}
-            courseFees={courseFees.filter(fee => fee.orgId === currentOrgId && !fee.isDeleted)}
-            enrollments={enrollments.filter(enrollment => enrollment.orgId === currentOrgId && !enrollment.isDeleted)}
-            taxCategories={taxCategories.filter(category => category.orgId === currentOrgId && !category.isDeleted)}
-            onPostInvoice={handlePostJournal}
-            onApproveInvoice={handleApproveJournal}
-            currentUser={currentUser}
-            onNotify={handleNotify}
-            orgId={currentOrgId}
-          />}
-          {activeTab === 'revenue-recognition' && <RevenueRecognitionView orgId={currentOrgId} currency={currentOrg?.currency || 'USD'} schedules={revenueSchedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} entries={revenueRecognitionEntries.filter(e => e.orgId === currentOrgId)} customers={[...students.map(s => ({ id: s.id, name: `${s.firstName} ${s.lastName} ` })), ...sponsors.map(sp => ({ id: sp.id, name: sp.name }))]} accounts={filteredAccounts} onCreateSchedule={handleAddRevenueSchedule} onUpdateSchedule={handleUpdateRevenueSchedule} onDeleteSchedule={handleDeleteRevenueSchedule} onCreateEntry={handleAddRevenueRecognitionEntry} onUpdateEntry={handleUpdateRevenueRecognitionEntry} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
-          {activeTab === 'ap' && <APView orgId={currentOrgId} payables={payables} checks={checkVouchers} purchaseOrders={purchaseOrders} purchaseOrderLines={purchaseOrderLines} goodsReceipts={goodsReceipts} goodsReceiptLines={goodsReceiptLines} vendors={vendors} accounts={filteredAccounts} entries={activeJournalEntries} items={items} lines={filteredLines} bankAccounts={bankAccounts} currentUserId={currentUser?.id} recurringBills={recurringBills} recurringBillHistory={recurringBillHistory} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onApproveException={handleApproveException} onPostBill={handlePostJournal} onCreateRecurringBill={(bill) => setRecurringBills(prev => [...prev, { ...bill, id: Date.now().toString() } as RecurringBill])} onUpdateRecurringBill={(id, updates) => setRecurringBills(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b))} onDeleteRecurringBill={(id) => setRecurringBills(prev => prev.filter(b => b.id !== id))} onNotify={handleNotify} />}
-          {activeTab === 'payables' && userCanAccess('payables') && <PayablesView orgId={currentOrgId} payables={payables} vendors={vendors} accounts={filteredAccounts} qualifications={qualifications} taxCategories={taxCategories} entries={activeJournalEntries} bankAccounts={bankAccounts} vendorTaxSettings={vendorTaxSettings} atcCategories={atcCategories} atcItems={atcItems} atcRates={atcRates} employees={users.filter(user => user.orgId === currentOrgId && user.role !== 'SYSTEM_ADMIN' && user.role !== 'STUDENT' && !user.isDeleted)} currentUserId={currentUser?.id} canCreate={canPerformAction(currentUser?.role, 'payables', 'create')} canEdit={canPerformAction(currentUser?.role, 'payables', 'edit')} canDelete={canPerformAction(currentUser?.role, 'payables', 'delete')} canApprove={canPerformAction(currentUser?.role, 'payables', 'approve')} canPay={canPerformAction(currentUser?.role, 'payables', 'post')} canCancel={canPerformAction(currentUser?.role, 'payables', 'void')} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onPostJournal={handlePostJournal} onJournalChanged={async () => {
-            const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
-            const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
-            setJournalEntries(refreshedEntries);
-            setJournalLines(refreshedLineGroups.flat());
-          }} onNotify={handleNotify} />}
-          {activeTab === 'ap-memos' && userCanAccess('ap-memos') && currentUser?.id && <APMemosView orgId={currentOrgId} payables={payables} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} currentUserId={currentUser.id} currentUserName={currentUser.name || currentUser.email} currentUserRole={currentUser.role} currency={currentOrg?.currency || 'PHP'} brandColor={brandColor} onNotify={handleNotify} />}
-          {activeTab === 'ap-reclassifications' && userCanAccess('ap-reclassifications') && currentUser?.id && <APReclassificationsView orgId={currentOrgId} payables={payables} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} entries={activeJournalEntries} lines={filteredLines} currentUserId={currentUser.id} currentUserRole={currentUser.role} currency={currentOrg?.currency || 'PHP'} onNotify={handleNotify} onJournalChanged={async () => {
-            const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
-            const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
-            setJournalEntries(refreshedEntries);
-            setJournalLines(refreshedLineGroups.flat());
-          }} />}
-          {activeTab === 'time-expenses' && userCanAccess('time-expenses') && <TimeExpensesView orgId={currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId || ''} payables={payables} vendors={vendors.filter(v => v.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !v.isDeleted)} accounts={filteredAccounts} qualifications={qualifications.filter(q => q.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !q.isDeleted)} taxCategories={taxCategories.filter(tc => tc.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && !tc.isDeleted)} employees={users.filter(user => user.orgId === (currentUser?.role === 'SYSTEM_ADMIN' ? currentOrgId : currentUser?.orgId) && user.role !== 'SYSTEM_ADMIN' && user.role !== 'STUDENT' && !user.isDeleted)} currency={currentOrg?.currency || 'PHP'} currentUserId={currentUser?.id} onCreatePayable={handleAddPayable} onNotify={handleNotify} />}
-          {activeTab === 'ap-aging-report' && userCanAccess('ap-aging-report') && <PayablesView view="aging" orgId={currentOrgId} payables={payables} vendors={vendors} accounts={filteredAccounts} qualifications={qualifications} taxCategories={taxCategories} entries={activeJournalEntries} bankAccounts={bankAccounts} vendorTaxSettings={vendorTaxSettings} atcCategories={atcCategories} atcItems={atcItems} atcRates={atcRates} currentUserId={currentUser?.id} onCreatePayable={handleAddPayable} onUpdatePayable={handleUpdatePayable} onDeletePayable={handleDeletePayable} onPostJournal={handlePostJournal} onJournalChanged={async () => {
-            const refreshedEntries = await dataService.getJournalEntriesByOrg(currentOrgId);
-            const refreshedLineGroups = await Promise.all(refreshedEntries.map(entry => dataService.getJournalLinesByEntry(entry.id)));
-            setJournalEntries(refreshedEntries);
-            setJournalLines(refreshedLineGroups.flat());
-          }} onNotify={handleNotify} />}
-          {activeTab === 'po' && <PurchaseOrdersView orgId={currentOrgId} purchaseOrders={purchaseOrders} vendors={vendors} items={items} onCreatePO={handleAddPurchaseOrder} onUpdateStatus={handleUpdatePurchaseOrderStatus} onConvertToBill={handleConvertToBill} />}
-          {activeTab === 'goods-receipt' && <GoodsReceiptView orgId={currentOrgId} goodsReceipts={goodsReceipts} purchaseOrders={purchaseOrders.filter(po => po.orgId === currentOrgId)} vendors={vendors} accounts={filteredAccounts} currentUserId={currentUser?.id} onCreateGoodsReceipt={handleAddGoodsReceipt} onUpdateGoodsReceipt={handleUpdateGoodsReceipt} onDeleteGoodsReceipt={handleDeleteGoodsReceipt} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
+              {activeTab === 'coa' && <ChartOfAccounts accounts={filteredAccounts} lines={postedLines} qualifications={qualifications} onAddAccount={handleAddAccount} onUpdateAccount={handleUpdateAccount} onDeleteAccount={handleDeleteAccount} />}
+              {activeTab === 'periods' && <PeriodClosingView orgId={currentOrgId} periods={accountingPeriods} payables={payables} entries={activeJournalEntries} accounts={filteredAccounts} currentUserId={currentUser?.id} onCreatePeriod={async (p) => { try { const service = DataServiceFactory.getService(); const periodWithOrgAndUser = { ...p, orgId: currentOrgId, createdBy: currentUser?.id }; const created = await service.createAccountingPeriod(periodWithOrgAndUser); setAccountingPeriods(prev => [...prev, created]); handleNotify('success', 'Period created successfully'); } catch (error) { console.error('Error creating period:', error); handleNotify('error', 'Failed to create period'); } }} onUpdatePeriod={async (id, u) => { try { const service = DataServiceFactory.getService(); const updated = await service.updateAccountingPeriod(id, u); setAccountingPeriods(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p)); handleNotify('success', 'Period updated successfully'); } catch (error) { console.error('Error updating period:', error); handleNotify('error', 'Failed to update period'); } }} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
+              {activeTab === 'items' && <ItemsView items={items.filter(i => i.orgId === currentOrgId && !i.isDeleted)} accounts={filteredAccounts} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} />}
+              {activeTab === 'sponsors' && userCanAccess('sponsors') && (
+                <SponsorsView
+                  orgId={currentOrgId}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  accounts={filteredAccounts}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  currency={currentOrg?.currency || 'USD'}
+                  onAddSponsor={handleAddSponsor}
+                  onUpdateSponsor={handleUpdateSponsor}
+                  onDeleteSponsor={handleDeleteSponsor}
+                />
+              )}
+              {activeTab === 'vendors' && <VendorsView orgId={currentOrgId} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} lines={filteredLines} onAddVendor={handleAddVendor} onUpdateVendor={handleUpdateVendor} onDeleteVendor={handleDeleteVendor} onNotify={handleNotify} />}
+              {activeTab === 'assets' && <AssetsView assets={fixedAssets.filter(a => a.orgId === currentOrgId && !a.isDeleted)} accounts={filteredAccounts} lines={filteredLines} entries={activeJournalEntries} onDepreciate={handleDepreciate} onAddAsset={handleAddFixedAsset} onUpdateAsset={handleUpdateFixedAsset} onDeleteAsset={handleDeleteFixedAsset} onNotify={handleNotify} />}
 
-          {activeTab === 'coa' && <ChartOfAccounts accounts={filteredAccounts} lines={postedLines} qualifications={qualifications} onAddAccount={handleAddAccount} onUpdateAccount={handleUpdateAccount} onDeleteAccount={handleDeleteAccount} />}
-          {activeTab === 'periods' && <PeriodClosingView orgId={currentOrgId} periods={accountingPeriods} payables={payables} entries={activeJournalEntries} accounts={filteredAccounts} currentUserId={currentUser?.id} onCreatePeriod={async (p) => { try { const service = DataServiceFactory.getService(); const periodWithOrgAndUser = { ...p, orgId: currentOrgId, createdBy: currentUser?.id }; const created = await service.createAccountingPeriod(periodWithOrgAndUser); setAccountingPeriods(prev => [...prev, created]); handleNotify('success', 'Period created successfully'); } catch (error) { console.error('Error creating period:', error); handleNotify('error', 'Failed to create period'); } }} onUpdatePeriod={async (id, u) => { try { const service = DataServiceFactory.getService(); const updated = await service.updateAccountingPeriod(id, u); setAccountingPeriods(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p)); handleNotify('success', 'Period updated successfully'); } catch (error) { console.error('Error updating period:', error); handleNotify('error', 'Failed to update period'); } }} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
-          {activeTab === 'items' && <ItemsView items={items.filter(i => i.orgId === currentOrgId && !i.isDeleted)} accounts={filteredAccounts} onAddItem={handleAddItem} onUpdateItem={handleUpdateItem} onDeleteItem={handleDeleteItem} />}
-          {activeTab === 'sponsors' && userCanAccess('sponsors') && (
-            <SponsorsView
-              orgId={currentOrgId}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              accounts={filteredAccounts}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              currency={currentOrg?.currency || 'USD'}
-              onAddSponsor={handleAddSponsor}
-              onUpdateSponsor={handleUpdateSponsor}
-              onDeleteSponsor={handleDeleteSponsor}
-            />
-          )}
-          {activeTab === 'vendors' && <VendorsView orgId={currentOrgId} vendors={vendors.filter(v => v.orgId === currentOrgId && !v.isDeleted)} accounts={filteredAccounts} lines={filteredLines} onAddVendor={handleAddVendor} onUpdateVendor={handleUpdateVendor} onDeleteVendor={handleDeleteVendor} onNotify={handleNotify} />}
-          {activeTab === 'assets' && <AssetsView assets={fixedAssets.filter(a => a.orgId === currentOrgId && !a.isDeleted)} accounts={filteredAccounts} lines={filteredLines} entries={activeJournalEntries} onDepreciate={handleDepreciate} onAddAsset={handleAddFixedAsset} onUpdateAsset={handleUpdateFixedAsset} onDeleteAsset={handleDeleteFixedAsset} onNotify={handleNotify} />}
+              {/* Inventory Management Views */}
+              {activeTab === 'inventory' && <InventoryView items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} transactions={inventoryTransactions.filter(t => !t.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} reorderPoints={reorderPoints.filter(r => !r.isDeleted)} currency={currentOrg?.currency || 'USD'} onSelectItem={(itemId) => setActiveTab('stock-items')} onAdjustItem={(itemId) => { setInventoryAdjustmentItemId(itemId); setActiveTab('stock-adjustments'); }} />}
+              {activeTab === 'warehouse-locations' && <WarehouseLocationsView orgId={currentOrgId} locations={warehouseLocations.filter(l => !l.isDeleted)} onAdd={handleAddWarehouseLocation} onUpdate={handleUpdateWarehouseLocation} onDelete={handleDeleteWarehouseLocation} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
+              {activeTab === 'inventory-classes' && <InventoryClassesView classes={inventoryClasses} accounts={filteredAccounts} warehouses={warehouseLocations} organization={currentOrg} onSave={handleSaveInventoryClass} />}
+              {activeTab === 'opening-inventory' && <OpeningInventoryView items={stockItems} warehouses={warehouseLocations} levels={inventoryLevels} organization={currentOrg} onPost={handlePostOpeningInventory} />}
+              {activeTab === 'stock-items' && <StockItemsView orgId={currentOrgId} items={stockItems.filter(i => !i.isDeleted)} inventoryClasses={inventoryClasses} accounts={filteredAccounts} locations={warehouseLocations.filter(location => !location.isDeleted)} levels={inventoryLevels.filter(level => !level.isDeleted)} onAdd={handleAddStockItem} onUpdate={handleUpdateStockItem} onDelete={handleDeleteStockItem} onManageQuantity={() => setActiveTab('stock-adjustments')} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
+              {activeTab === 'stock-levels' && <InventoryView items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} transactions={inventoryTransactions.filter(t => !t.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} reorderPoints={reorderPoints.filter(r => !r.isDeleted)} currency={currentOrg?.currency || 'USD'} organization={currentOrg} onAdjustItem={(itemId) => { setInventoryAdjustmentItemId(itemId); setActiveTab('stock-adjustments'); }} />}
+              {activeTab === 'stock-adjustments' && <StockAdjustmentsView adjustments={stockAdjustments.filter(a => !a.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} accounts={filteredAccounts} onAdd={handleAddStockAdjustment} onUpdate={handleUpdateStockAdjustment} onDelete={handleDeleteStockAdjustment} onReverse={handleReverseStockAdjustment} initialItemId={inventoryAdjustmentItemId || undefined} onInitialItemConsumed={() => setInventoryAdjustmentItemId(null)} currency={currentOrg?.currency || 'USD'} currentUserId={currentUser?.id} isLoading={isLoading} organization={currentOrg} />}
+              {activeTab === 'reorder-points' && <ReorderView reorderPoints={reorderPoints.filter(r => !r.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} onAdd={handleAddReorderPoint} onUpdate={handleUpdateReorderPoint} onDelete={handleDeleteReorderPoint} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
+              {activeTab === 'inventory-transactions' && <InventoryTransactionsView orgId={currentOrgId} transactions={inventoryTransactions.filter(t => !t.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
+              {activeTab === 'banking' && <BankingView bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)} summaries={summaries} accounts={filteredAccounts} entries={activeJournalEntries} lines={filteredLines} bankReconciliations={bankReconciliations} onAddBankAccount={handleAddBankAccount} onUpdateBankAccount={handleUpdateBankAccount} onDeleteBankAccount={handleDeleteBankAccount} onAddBankReconciliation={handleAddBankReconciliation} onUpdateBankReconciliation={handleUpdateBankReconciliation} onDeleteBankReconciliation={handleDeleteBankReconciliation} onPostTransfer={handlePostJournal} onToggleClearLine={id => setJournalLines(prev => prev.map(l => l.id === id ? { ...l, isCleared: !l.isCleared } : l))} onNotify={handleNotify} />}
+              {activeTab === 'checks' && <CheckPrintingView orgId={currentOrgId} checks={checkVouchers} bankAccounts={bankAccounts} vendors={vendors} payables={payables} accounts={filteredAccounts} entries={activeJournalEntries} currentUserId={currentUser?.id} onCreateCheck={handleAddCheckVoucher} onUpdateCheck={handleUpdateCheckVoucher} onDeleteCheck={handleDeleteCheckVoucher} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
 
-          {/* Inventory Management Views */}
-          {activeTab === 'inventory' && <InventoryView items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} transactions={inventoryTransactions.filter(t => !t.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} reorderPoints={reorderPoints.filter(r => !r.isDeleted)} currency={currentOrg?.currency || 'USD'} onSelectItem={(itemId) => setActiveTab('stock-items')} onAdjustItem={(itemId) => { setInventoryAdjustmentItemId(itemId); setActiveTab('stock-adjustments'); }} />}
-          {activeTab === 'warehouse-locations' && <WarehouseLocationsView orgId={currentOrgId} locations={warehouseLocations.filter(l => !l.isDeleted)} onAdd={handleAddWarehouseLocation} onUpdate={handleUpdateWarehouseLocation} onDelete={handleDeleteWarehouseLocation} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
-          {activeTab === 'inventory-classes' && <InventoryClassesView classes={inventoryClasses} accounts={filteredAccounts} warehouses={warehouseLocations} organization={currentOrg} onSave={handleSaveInventoryClass} />}
-          {activeTab === 'opening-inventory' && <OpeningInventoryView items={stockItems} warehouses={warehouseLocations} levels={inventoryLevels} organization={currentOrg} onPost={handlePostOpeningInventory} />}
-          {activeTab === 'stock-items' && <StockItemsView orgId={currentOrgId} items={stockItems.filter(i => !i.isDeleted)} inventoryClasses={inventoryClasses} accounts={filteredAccounts} locations={warehouseLocations.filter(location => !location.isDeleted)} levels={inventoryLevels.filter(level => !level.isDeleted)} onAdd={handleAddStockItem} onUpdate={handleUpdateStockItem} onDelete={handleDeleteStockItem} onManageQuantity={() => setActiveTab('stock-adjustments')} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
-          {activeTab === 'stock-levels' && <InventoryView items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} transactions={inventoryTransactions.filter(t => !t.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} reorderPoints={reorderPoints.filter(r => !r.isDeleted)} currency={currentOrg?.currency || 'USD'} organization={currentOrg} onAdjustItem={(itemId) => { setInventoryAdjustmentItemId(itemId); setActiveTab('stock-adjustments'); }} />}
-          {activeTab === 'stock-adjustments' && <StockAdjustmentsView adjustments={stockAdjustments.filter(a => !a.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} accounts={filteredAccounts} onAdd={handleAddStockAdjustment} onUpdate={handleUpdateStockAdjustment} onDelete={handleDeleteStockAdjustment} onReverse={handleReverseStockAdjustment} initialItemId={inventoryAdjustmentItemId || undefined} onInitialItemConsumed={() => setInventoryAdjustmentItemId(null)} currency={currentOrg?.currency || 'USD'} currentUserId={currentUser?.id} isLoading={isLoading} organization={currentOrg} />}
-          {activeTab === 'reorder-points' && <ReorderView reorderPoints={reorderPoints.filter(r => !r.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} levels={inventoryLevels.filter(l => !l.isDeleted)} onAdd={handleAddReorderPoint} onUpdate={handleUpdateReorderPoint} onDelete={handleDeleteReorderPoint} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
-          {activeTab === 'inventory-transactions' && <InventoryTransactionsView orgId={currentOrgId} transactions={inventoryTransactions.filter(t => !t.isDeleted)} items={stockItems.filter(i => !i.isDeleted)} locations={warehouseLocations.filter(l => !l.isDeleted)} currency={currentOrg?.currency || 'USD'} isLoading={isLoading} organization={currentOrg} />}
-          {activeTab === 'banking' && <BankingView bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)} summaries={summaries} accounts={filteredAccounts} entries={activeJournalEntries} lines={filteredLines} bankReconciliations={bankReconciliations} onAddBankAccount={handleAddBankAccount} onUpdateBankAccount={handleUpdateBankAccount} onDeleteBankAccount={handleDeleteBankAccount} onAddBankReconciliation={handleAddBankReconciliation} onUpdateBankReconciliation={handleUpdateBankReconciliation} onDeleteBankReconciliation={handleDeleteBankReconciliation} onPostTransfer={handlePostJournal} onToggleClearLine={id => setJournalLines(prev => prev.map(l => l.id === id ? { ...l, isCleared: !l.isCleared } : l))} onNotify={handleNotify} />}
-          {activeTab === 'checks' && <CheckPrintingView orgId={currentOrgId} checks={checkVouchers} bankAccounts={bankAccounts} vendors={vendors} payables={payables} accounts={filteredAccounts} entries={activeJournalEntries} currentUserId={currentUser?.id} onCreateCheck={handleAddCheckVoucher} onUpdateCheck={handleUpdateCheckVoucher} onDeleteCheck={handleDeleteCheckVoucher} onPostJournal={handlePostJournal} onNotify={handleNotify} />}
+              {activeTab === 'branding' && currentOrg && <BrandingView organization={currentOrg} onUpdate={o => handleUpdateOrganization(o.id, o)} />}
+              {activeTab === 'subscription' && isSysAdmin && currentOrg && (
+                <div className="system-owner-minimal">
+                  <SubscriptionView organization={currentOrg} onUpdate={o => handleUpdateOrganization(o.id, o)} />
+                </div>
+              )}
+              {activeTab === 'payment-history' && currentOrg && <PaymentHistoryView payments={paymentHistory.filter(p => p.orgId === currentOrgId)} currency={currentOrg.currency} organization={currentOrg} />}
 
-          {activeTab === 'branding' && currentOrg && <BrandingView organization={currentOrg} onUpdate={o => handleUpdateOrganization(o.id, o)} />}
-          {activeTab === 'subscription' && isSysAdmin && currentOrg && (
-            <div className="system-owner-minimal">
-              <SubscriptionView organization={currentOrg} onUpdate={o => handleUpdateOrganization(o.id, o)} />
-            </div>
-          )}
-          {activeTab === 'payment-history' && currentOrg && <PaymentHistoryView payments={paymentHistory.filter(p => p.orgId === currentOrgId)} currency={currentOrg.currency} organization={currentOrg} />}
-
-          {activeTab === 'payroll' && userCanAccess('payroll') && <PayrollView employees={employees.filter(e => e.orgId === currentOrgId && !e.isDeleted)} payrollRuns={payrollRuns} payrollLines={payrollLines} accounts={filteredAccounts} bankAccounts={bankAccounts} entries={activeJournalEntries} orgName={currentOrg?.name} onPostPayroll={handlePostPayroll} />}
-          {activeTab === 'students' && userCanAccess('students') && <StudentsView orgId={currentOrgId} students={students.filter(s => s.orgId === currentOrgId)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} onBatchAddStudents={handleBatchAddStudents} canCreateStudent={canPerformAction(currentUser?.role, 'students', 'create')} canEditStudent={canPerformAction(currentUser?.role, 'students', 'edit')} />}
-          {activeTab === 'trainers' && <TrainersView organization={currentOrg} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} onAddTrainer={handleAddTrainer} onUpdateTrainer={handleUpdateTrainer} onDeleteTrainer={handleDeleteTrainer} />}
-          {activeTab === 'qualifications' && <QualificationsView organization={currentOrg} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} onAddQualification={handleAddQualification} onUpdateQualification={handleUpdateQualification} onDeleteQualification={handleDeleteQualification} />}
-          {activeTab === 'course-fees' && <CourseFeesView courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} accounts={filteredAccounts} currency={currentOrg?.currency || 'PHP'} onAddCourseFee={handleAddCourseFee} onUpdateCourseFee={handleUpdateCourseFee} onDeleteCourseFee={handleDeleteCourseFee} onNotify={handleNotify} />}
-          {activeTab === 'batches' && <BatchesView organization={currentOrg} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} onAddBatch={handleAddBatch} onUpdateBatch={handleUpdateBatch} onDeleteBatch={handleDeleteBatch} onNotify={handleNotify} />}
-          {activeTab === 'transcripts' && <TranscriptRecordsView orgId={currentOrgId} currentUserId={currentUser?.id} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onNotify={handleNotify} />}
-          {activeTab === 'alumni-reports' && (
-            <AlumniEmploymentView
-              organization={currentOrg}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
-              alumniReports={alumniReports.filter(r => r.orgId === currentOrgId)}
-              batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-              qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-              onAddReport={handleAddAlumniReport}
-              onUpdateReport={handleUpdateAlumniReport}
-              onDeleteReport={handleDeleteAlumniReport}
-            />
-          )}
-          {activeTab === 'enrollments' && userCanAccess('enrollments') && <EnrollmentsView orgId={currentOrgId} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} currency={currentOrg?.currency || 'PHP'} onAddEnrollment={handleAddEnrollment} onUpdateEnrollment={handleUpdateEnrollment} onDeleteEnrollment={handleDeleteEnrollment} />}
-          {activeTab === 'assessment-registrations' && userCanAccess('assessment-registrations') && (
-            <AssessmentRegistrationsView
-              registrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-              onAddRegistration={handleAddAssessmentRegistration}
-              onUpdateRegistration={handleUpdateAssessmentRegistration}
-              onDeleteRegistration={handleDeleteAssessmentRegistration}
-            />
-          )}
-          {activeTab === 'invoices' && <InvoicesView
-            invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted && (i.documentType || 'INVOICE') === 'INVOICE')}
-            payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-            sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            users={users}
-            currentUser={currentUser}
-            enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
-            assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
-            batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-            qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-            courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)}
-            accounts={filteredAccounts}
-            currency={currentOrg?.currency || 'PHP'}
-            isVatRegistered={currentOrg?.isVatRegistered || false}
-            onAddInvoice={handleAddInvoice}
-            onUpdateInvoice={handleUpdateInvoice}
-            onDeleteInvoice={handleDeleteInvoice}
-            onVoidInvoice={handleVoidInvoice}
-            onUpdateEnrollment={handleUpdateEnrollment}
-            onUpdateAssessmentRegistration={handleUpdateAssessmentRegistration}
-            onAddStudentLedgerEntry={entry => setStudentLedger(prev => [...prev, entry])}
-            journalEntries={activeJournalEntries}
-            onViewJournal={handleViewJournal}
-            onNavigate={navigateTo}
-            organization={currentOrg}
-            orgId={currentOrgId}
-            taxCategories={taxCategories}
-            onAddStudent={handleAddStudent}
-          />}
-          {activeTab === 'non-invoice-payments' && <InvoicesView
-            documentMode="NON_INVOICE_PAYMENT"
-            invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted && i.documentType === 'NON_INVOICE_PAYMENT')}
-            payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-            sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            users={users}
-            currentUser={currentUser}
-            enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
-            assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
-            batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-            qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
-            courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)}
-            accounts={filteredAccounts}
-            currency={currentOrg?.currency || 'PHP'}
-            isVatRegistered={currentOrg?.isVatRegistered || false}
-            onAddInvoice={handleAddInvoice}
-            onUpdateInvoice={handleUpdateInvoice}
-            onDeleteInvoice={handleDeleteInvoice}
-            onVoidInvoice={handleVoidInvoice}
-            onUpdateEnrollment={handleUpdateEnrollment}
-            onUpdateAssessmentRegistration={handleUpdateAssessmentRegistration}
-            journalEntries={activeJournalEntries}
-            onViewJournal={handleViewJournal}
-            onNavigate={navigateTo}
-            organization={currentOrg}
-            orgId={currentOrgId}
-            taxCategories={taxCategories}
-            onAddStudent={handleAddStudent}
-          />}
-          {activeTab === 'payments' && <PaymentsView
-            currentOrgId={currentOrgId}
-            organization={currentOrg}
-            payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-            sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-            users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
-            invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-            bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-            accounts={filteredAccounts}
-            journalEntries={activeJournalEntries}
-            currency={currentOrg?.currency || 'PHP'}
-            onAddPayment={handleAddPayment}
-            onUpdatePayment={handleUpdatePayment}
-            onPostPayment={handlePostPayment}
-            onDeletePayment={handleDeletePayment}
-            onVoidPayment={handleVoidPayment}
-            onApplyToInvoice={handleApplyToInvoice}
-            onReverseApplication={handleReverseApplication}
-            onViewJournal={handleViewJournal}
-            initialContext={navigationContext}
-            onClearContext={() => setNavigationContext(null)}
-          />}
-          {activeTab === 'bank-deposits' && <BankDepositsView
-            deposits={bankDeposits.filter(d => d.orgId === currentOrgId && !d.isDeleted)}
-            bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-            payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-            currency={currentOrg?.currency || 'PHP'}
-            onAddDeposit={handleAddBankDeposit}
-            onUpdateDeposit={handleUpdateBankDeposit}
-            onDeleteDeposit={handleDeleteBankDeposit}
-            onVoidDeposit={handleVoidBankDeposit}
-            onPostDeposit={async (deposit) => {
-              // 1. Update deposit status in state
-              setBankDeposits(prev => prev.map(d => d.id === deposit.id ? { ...deposit, status: 'POSTED', postedAt: new Date().toISOString() } : d));
-
-              // 2. Find COA accounts for Undeposited Funds (1000) and Bank Account (1010)
-              const coa = accounts.filter(a => a.orgId === currentOrgId);
-              const undepositedAcct = coa.find(a => a.code === '1000');
-              const bankAcct = coa.find(a => a.code === '1010' && a.id === deposit.bankAccountId);
-              // Fallback: if not found by id, just use code 1010
-              const bankAccount = bankAccounts.find(b => b.id === deposit.bankAccountId);
-              const bankAcctById = coa.find(a => a.id === bankAccount?.accountId);
-              const finalBankAcct = bankAcctById || bankAcct;
-
-              if (undepositedAcct && finalBankAcct) {
-                // 3. Create Journal Entry for DEPOSIT
-                const entry: Partial<JournalEntry> = {
-                  orgId: currentOrgId,
-                  periodId: deposit.periodId || '',
-                  date: deposit.depositDate,
-                  description: `Bank Deposit #${deposit.depositNo} `,
-                  reference: `DEPOSIT - ${deposit.depositNo} `,
-                  status: 'POSTED',
-                  sourceType: 'DEPOSIT',
-                  sourceRef: deposit.id,
-                  createdBy: currentUser?.id || 'system',
-                  createdAt: new Date().toISOString(),
-                  postedBy: currentUser?.id || 'system',
-                  postedAt: new Date().toISOString()
-                };
-                const lines: JournalLine[] = [
-                  {
-                    id: `jl-${Date.now()}-1`,
-                    journalEntryId: '',
-                    orgId: currentOrgId,
-                    accountId: finalBankAcct.id,
-                    debit: deposit.totalAmount,
-                    credit: 0,
-                    description: 'Deposit to Bank'
-                  },
-                  {
-                    id: `jl-${Date.now()}-2`,
-                    journalEntryId: '',
-                    orgId: currentOrgId,
-                    accountId: undepositedAcct.id,
-                    debit: 0,
-                    credit: deposit.totalAmount,
-                    description: 'Clear Undeposited Funds'
-                  }
-                ];
-                await handlePostJournal(entry, lines);
-              }
-
-              // 4. Mark included payments as deposited
-              if (deposit.lines && deposit.lines.length > 0) {
-                setPayments(prev => prev.map(p => {
-                  const included = deposit.lines?.some(l => l.paymentId === p.id);
-                  if (included) {
-                    return { ...p, status: 'DEPOSITED', bankAccountId: deposit.bankAccountId, postedAt: new Date().toISOString() };
-                  }
-                  return p;
-                }));
-              }
-
-              // 5. Notify
-              handleNotify('success', `Deposit #${deposit.depositNo} posted and journal entry created.`);
-            }}
-          />}
-          {activeTab === 'locations' && <LocationsView organization={currentOrg} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} onAddLocation={handleAddLocation} onUpdateLocation={handleUpdateLocation} onDeleteLocation={handleDeleteLocation} />}
-          {activeTab === 'schedules' && <SchedulesView organization={currentOrg} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} onAddSchedule={handleAddSchedule} onUpdateSchedule={handleUpdateSchedule} onDeleteSchedule={handleDeleteSchedule} />}
-
-          {activeTab === 'employees' && <EmployeesView
-            employees={employees.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
-            organization={currentOrg}
-            onAddEmployee={handleAddEmployee}
-            onUpdateEmployee={handleUpdateEmployee}
-            onDeleteEmployee={handleDeleteEmployee}
-          />}
-          {activeTab === 'employee-directory' && userCanAccess('employee-directory') && <EmployeeDirectoryView
-            organization={currentOrg}
-            users={users.filter(user => user.orgId === currentOrgId)}
-          />}
-          {activeTab === 'users' && <UsersManagementView
-            users={users.filter(u => u.orgId === currentOrgId)}
-            students={students.filter(s => s.orgId === currentOrgId)}
-            trainers={trainers.filter(t => t.orgId === currentOrgId)}
-            organization={currentOrg}
-            onAddUser={handleAddUser}
-            onUpdateUser={handleUpdateUser}
-            onDeleteUser={handleDeleteUser}
-          />}
-          {activeTab === 'audit' && canViewAuditTrail && <AuditTrail orgId={currentOrgId} logs={auditLogs} brandColor={brandColor} />}
-          {activeTab === 'maintenance' && (
-            <div className="system-owner-minimal">
-              <MaintenanceView logs={auditLogs} onExport={() => { }} onImport={() => { }} />
-            </div>
-          )}
-          {activeTab === 'backup-restore' && (
-            <div className="system-owner-minimal">
-              <BackupRestoreView
-                organizations={organizations}
-                currentOrgId={currentOrgId}
-                currentUserId={currentUser?.id || ''}
-                currentUserName={currentUser?.email || 'System'}
-                allData={{
-                  organizations, users, students, qualifications, trainers, batches, sponsors,
-                  vendors, employees, payrollRuns, journalEntries, JournalLines: journalLines, auditLogs,
-                  budgets: [], chartOfAccounts: accounts, purchaseOrders, paymentHistory, payables, accountingPeriods,
-                  checkVouchers, eftBatches, goodsReceipts, bankReconciliations, warehouseLocations,
-                  stockItems, inventoryLevels, inventoryTransactions, stockAdjustments, nonStockItems: items,
-                  fixedAssets, bankAccounts, locations
-                }}
-                onRestore={handleRestoreBackup}
-                onNotify={handleNotify}
-                currency={currentOrg?.currency || 'USD'}
-              />
-            </div>
-          )}
-          {activeTab === 'tenant-mgmt' && (
-            <div className="system-owner-minimal">
-              <TenantManagementView organizations={organizations} onAddTenant={handleAddOrganization} onUpdateTenant={(id, updates) => handleUpdateOrganization(id, updates)} />
-            </div>
-          )}
-          {activeTab === 'schema' && (
-            <div className="system-owner-minimal">
-              <SchemaManualView />
-            </div>
-          )}
-          {activeTab === 'payment-monitoring' && (
-            <div className="system-owner-minimal">
-              <PaymentMonitoringView payments={payments} organizations={organizations} />
-            </div>
-          )}
-          {activeTab === 'feedback' && (
-            <div className={isSysAdmin ? 'system-owner-minimal' : undefined}>
-              <FeedbackManagementView
-                tickets={feedbackTickets}
-                currentUser={currentUser}
-                currentOrgId={currentOrgId}
-                organizations={organizations}
+              {activeTab === 'payroll' && userCanAccess('payroll') && <PayrollView employees={employees.filter(e => e.orgId === currentOrgId && !e.isDeleted)} payrollRuns={payrollRuns} payrollLines={payrollLines} accounts={filteredAccounts} bankAccounts={bankAccounts} entries={activeJournalEntries} orgName={currentOrg?.name} onPostPayroll={handlePostPayroll} />}
+              {activeTab === 'students' && userCanAccess('students') && <StudentsView orgId={currentOrgId} students={students.filter(s => s.orgId === currentOrgId)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onAddStudent={handleAddStudent} onUpdateStudent={handleUpdateStudent} onDeleteStudent={handleDeleteStudent} onBatchAddStudents={handleBatchAddStudents} canCreateStudent={canPerformAction(currentUser?.role, 'students', 'create')} canEditStudent={canPerformAction(currentUser?.role, 'students', 'edit')} />}
+              {activeTab === 'trainers' && <TrainersView organization={currentOrg} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} onAddTrainer={handleAddTrainer} onUpdateTrainer={handleUpdateTrainer} onDeleteTrainer={handleDeleteTrainer} />}
+              {activeTab === 'qualifications' && <QualificationsView organization={currentOrg} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} onAddQualification={handleAddQualification} onUpdateQualification={handleUpdateQualification} onDeleteQualification={handleDeleteQualification} />}
+              {activeTab === 'course-fees' && <CourseFeesView courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} accounts={filteredAccounts} currency={currentOrg?.currency || 'PHP'} onAddCourseFee={handleAddCourseFee} onUpdateCourseFee={handleUpdateCourseFee} onDeleteCourseFee={handleDeleteCourseFee} onNotify={handleNotify} />}
+              {activeTab === 'batches' && <BatchesView organization={currentOrg} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} onAddBatch={handleAddBatch} onUpdateBatch={handleUpdateBatch} onDeleteBatch={handleDeleteBatch} onNotify={handleNotify} />}
+              {activeTab === 'transcripts' && <TranscriptRecordsView orgId={currentOrgId} currentUserId={currentUser?.id} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} brandColor={brandColor} onNotify={handleNotify} />}
+              {activeTab === 'alumni-reports' && (
+                <AlumniEmploymentView
+                  organization={currentOrg}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
+                  alumniReports={alumniReports.filter(r => r.orgId === currentOrgId)}
+                  batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                  qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                  onAddReport={handleAddAlumniReport}
+                  onUpdateReport={handleUpdateAlumniReport}
+                  onDeleteReport={handleDeleteAlumniReport}
+                />
+              )}
+              {activeTab === 'enrollments' && userCanAccess('enrollments') && <EnrollmentsView orgId={currentOrgId} enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)} students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} currency={currentOrg?.currency || 'PHP'} onAddEnrollment={handleAddEnrollment} onUpdateEnrollment={handleUpdateEnrollment} onDeleteEnrollment={handleDeleteEnrollment} />}
+              {activeTab === 'assessment-registrations' && userCanAccess('assessment-registrations') && (
+                <AssessmentRegistrationsView
+                  registrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                  onAddRegistration={handleAddAssessmentRegistration}
+                  onUpdateRegistration={handleUpdateAssessmentRegistration}
+                  onDeleteRegistration={handleDeleteAssessmentRegistration}
+                />
+              )}
+              {activeTab === 'invoices' && <InvoicesView
+                invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted && (i.documentType || 'INVOICE') === 'INVOICE')}
+                payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
                 users={users}
-                brandColor={brandColor}
-                onCreateTicket={handleCreateFeedbackTicket}
-                onUpdateTicket={handleUpdateFeedbackTicket}
-                onNotify={handleNotify}
-              />
-            </div>
-          )}
-          {activeTab === 'soa' && (
-            <SOAView
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-              orgName={currentOrg?.name || 'Institution'}
-            />
-          )}
-          {activeTab === 'aging-report' && (
-            <ARAgingReportView
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-            />
-          )}
-          {activeTab === 'write-off' && (
-            <ARWriteOffView
-              orgId={currentOrgId}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-              users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency || 'USD'}
-              onPostJournal={handlePostJournal}
-              onSaveJournal={handleSaveJournalDraft}
-              onApproveJournal={handleApproveJournal}
-              onViewJournal={handleViewJournal}
-              onNotify={handleNotify}
-              initialContext={navigationContext}
-              onClearContext={() => setNavigationContext(null)}
-              organization={currentOrg}
-              brandColor={brandColor}
-            />
-          )}
-          {activeTab === 'reclassify' && (
-            <ReclassificationView
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-              currentUser={currentUser}
-              onPostJournal={handlePostJournal}
-              onViewJournal={handleViewJournal}
-              onNotify={handleNotify}
-            />
-          )}
-          {activeTab === 'credit-debit-memo' && (
-            <ARCreditDebitMemoView
-              orgId={currentOrgId}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
-              users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              currency={currentOrg?.currency || 'USD'}
-              onPostJournal={handlePostJournal}
-              onSaveJournal={handleSaveJournalDraft}
-              onUpdateJournal={handleUpdateJournalDraft}
-              onApproveJournal={handleApproveJournal}
-              onReverseJournal={reverseJournalEntry}
-              onViewJournal={handleViewJournal}
-              onNotify={handleNotify}
-              organization={currentOrg}
-              brandColor={brandColor}
-            />
-          )}
-          {activeTab === 'collection-receipt' && (
-            <ARCollectionReceiptView
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
-              bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-            />
-          )}
-          {activeTab === 'customer-ledger' && (
-            <ARCustomerLedgerView
-              entries={activeJournalEntries}
-              lines={filteredLines}
-              accounts={filteredAccounts}
-              students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
-              currency={currentOrg?.currency || 'USD'}
-              brandColor={brandColor}
-            />
-          )}
+                currentUser={currentUser}
+                enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
+                assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
+                batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)}
+                accounts={filteredAccounts}
+                currency={currentOrg?.currency || 'PHP'}
+                isVatRegistered={currentOrg?.isVatRegistered || false}
+                onAddInvoice={handleAddInvoice}
+                onUpdateInvoice={handleUpdateInvoice}
+                onDeleteInvoice={handleDeleteInvoice}
+                onVoidInvoice={handleVoidInvoice}
+                onUpdateEnrollment={handleUpdateEnrollment}
+                onUpdateAssessmentRegistration={handleUpdateAssessmentRegistration}
+                onAddStudentLedgerEntry={entry => setStudentLedger(prev => [...prev, entry])}
+                journalEntries={activeJournalEntries}
+                onViewJournal={handleViewJournal}
+                onNavigate={navigateTo}
+                organization={currentOrg}
+                orgId={currentOrgId}
+                taxCategories={taxCategories}
+                onAddStudent={handleAddStudent}
+              />}
+              {activeTab === 'non-invoice-payments' && <InvoicesView
+                documentMode="NON_INVOICE_PAYMENT"
+                invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted && i.documentType === 'NON_INVOICE_PAYMENT')}
+                payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                users={users}
+                currentUser={currentUser}
+                enrollments={enrollments.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
+                assessmentRegistrations={assessmentRegistrations.filter(r => r.orgId === currentOrgId && !r.isDeleted)}
+                batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)}
+                courseFees={courseFees.filter(f => f.orgId === currentOrgId && !f.isDeleted)}
+                accounts={filteredAccounts}
+                currency={currentOrg?.currency || 'PHP'}
+                isVatRegistered={currentOrg?.isVatRegistered || false}
+                onAddInvoice={handleAddInvoice}
+                onUpdateInvoice={handleUpdateInvoice}
+                onDeleteInvoice={handleDeleteInvoice}
+                onVoidInvoice={handleVoidInvoice}
+                onUpdateEnrollment={handleUpdateEnrollment}
+                onUpdateAssessmentRegistration={handleUpdateAssessmentRegistration}
+                journalEntries={activeJournalEntries}
+                onViewJournal={handleViewJournal}
+                onNavigate={navigateTo}
+                organization={currentOrg}
+                orgId={currentOrgId}
+                taxCategories={taxCategories}
+                onAddStudent={handleAddStudent}
+              />}
+              {activeTab === 'payments' && <PaymentsView
+                currentOrgId={currentOrgId}
+                organization={currentOrg}
+                payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+                invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                accounts={filteredAccounts}
+                journalEntries={activeJournalEntries}
+                currency={currentOrg?.currency || 'PHP'}
+                onAddPayment={handleAddPayment}
+                onUpdatePayment={handleUpdatePayment}
+                onPostPayment={handlePostPayment}
+                onDeletePayment={handleDeletePayment}
+                onVoidPayment={handleVoidPayment}
+                onApplyToInvoice={handleApplyToInvoice}
+                onReverseApplication={handleReverseApplication}
+                onViewJournal={handleViewJournal}
+                initialContext={navigationContext}
+                onClearContext={() => setNavigationContext(null)}
+              />}
+              {activeTab === 'bank-deposits' && <BankDepositsView
+                deposits={bankDeposits.filter(d => d.orgId === currentOrgId && !d.isDeleted)}
+                bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                currency={currentOrg?.currency || 'PHP'}
+                onAddDeposit={handleAddBankDeposit}
+                onUpdateDeposit={handleUpdateBankDeposit}
+                onDeleteDeposit={handleDeleteBankDeposit}
+                onVoidDeposit={handleVoidBankDeposit}
+                onPostDeposit={async (deposit) => {
+                  // 1. Update deposit status in state
+                  setBankDeposits(prev => prev.map(d => d.id === deposit.id ? { ...deposit, status: 'POSTED', postedAt: new Date().toISOString() } : d));
 
-          {activeTab === 'customers' && (
-            <CustomerMasterListView
-              sponsors={sponsors}
-              students={students}
-              invoices={invoices}
-              enrollments={enrollments}
-              batches={batches}
-              qualifications={qualifications}
-              accounts={accounts}
-              brandColor={brandColor}
-              onAddSponsor={handleAddSponsor}
-              onUpdateSponsor={handleUpdateSponsor}
-              onDeleteSponsor={handleDeleteSponsor}
-              onAddStudent={handleAddStudent}
-              onUpdateStudent={handleUpdateStudent}
-              onDeleteStudent={handleDeleteStudent}
-              onBatchAddStudents={handleBatchAddStudents}
-              onNotify={handleNotify}
-            />
-          )}
+                  // 2. Find COA accounts for Undeposited Funds (1000) and Bank Account (1010)
+                  const coa = accounts.filter(a => a.orgId === currentOrgId);
+                  const undepositedAcct = coa.find(a => a.code === '1000');
+                  const bankAcct = coa.find(a => a.code === '1010' && a.id === deposit.bankAccountId);
+                  // Fallback: if not found by id, just use code 1010
+                  const bankAccount = bankAccounts.find(b => b.id === deposit.bankAccountId);
+                  const bankAcctById = coa.find(a => a.id === bankAccount?.accountId);
+                  const finalBankAcct = bankAcctById || bankAcct;
+
+                  if (undepositedAcct && finalBankAcct) {
+                    // 3. Create Journal Entry for DEPOSIT
+                    const entry: Partial<JournalEntry> = {
+                      orgId: currentOrgId,
+                      periodId: deposit.periodId || '',
+                      date: deposit.depositDate,
+                      description: `Bank Deposit #${deposit.depositNo} `,
+                      reference: `DEPOSIT - ${deposit.depositNo} `,
+                      status: 'POSTED',
+                      sourceType: 'DEPOSIT',
+                      sourceRef: deposit.id,
+                      createdBy: currentUser?.id || 'system',
+                      createdAt: new Date().toISOString(),
+                      postedBy: currentUser?.id || 'system',
+                      postedAt: new Date().toISOString()
+                    };
+                    const lines: JournalLine[] = [
+                      {
+                        id: `jl-${Date.now()}-1`,
+                        journalEntryId: '',
+                        orgId: currentOrgId,
+                        accountId: finalBankAcct.id,
+                        debit: deposit.totalAmount,
+                        credit: 0,
+                        description: 'Deposit to Bank'
+                      },
+                      {
+                        id: `jl-${Date.now()}-2`,
+                        journalEntryId: '',
+                        orgId: currentOrgId,
+                        accountId: undepositedAcct.id,
+                        debit: 0,
+                        credit: deposit.totalAmount,
+                        description: 'Clear Undeposited Funds'
+                      }
+                    ];
+                    await handlePostJournal(entry, lines);
+                  }
+
+                  // 4. Mark included payments as deposited
+                  if (deposit.lines && deposit.lines.length > 0) {
+                    setPayments(prev => prev.map(p => {
+                      const included = deposit.lines?.some(l => l.paymentId === p.id);
+                      if (included) {
+                        return { ...p, status: 'DEPOSITED', bankAccountId: deposit.bankAccountId, postedAt: new Date().toISOString() };
+                      }
+                      return p;
+                    }));
+                  }
+
+                  // 5. Notify
+                  handleNotify('success', `Deposit #${deposit.depositNo} posted and journal entry created.`);
+                }}
+              />}
+              {activeTab === 'locations' && <LocationsView organization={currentOrg} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} onAddLocation={handleAddLocation} onUpdateLocation={handleUpdateLocation} onDeleteLocation={handleDeleteLocation} />}
+              {activeTab === 'schedules' && <SchedulesView organization={currentOrg} batches={batches.filter(b => b.orgId === currentOrgId && !b.isDeleted)} schedules={schedules.filter(s => s.orgId === currentOrgId && !s.isDeleted)} trainers={trainers.filter(t => t.orgId === currentOrgId && !t.isDeleted)} qualifications={qualifications.filter(q => q.orgId === currentOrgId && !q.isDeleted)} locations={locations.filter(l => l.orgId === currentOrgId && !l.isDeleted)} onAddSchedule={handleAddSchedule} onUpdateSchedule={handleUpdateSchedule} onDeleteSchedule={handleDeleteSchedule} />}
+
+              {activeTab === 'employees' && <EmployeesView
+                employees={employees.filter(e => e.orgId === currentOrgId && !e.isDeleted)}
+                organization={currentOrg}
+                onAddEmployee={handleAddEmployee}
+                onUpdateEmployee={handleUpdateEmployee}
+                onDeleteEmployee={handleDeleteEmployee}
+              />}
+              {activeTab === 'employee-directory' && userCanAccess('employee-directory') && <EmployeeDirectoryView
+                organization={currentOrg}
+                users={users.filter(user => user.orgId === currentOrgId)}
+              />}
+              {activeTab === 'users' && <UsersManagementView
+                users={users.filter(u => u.orgId === currentOrgId)}
+                students={students.filter(s => s.orgId === currentOrgId)}
+                trainers={trainers.filter(t => t.orgId === currentOrgId)}
+                organization={currentOrg}
+                onAddUser={handleAddUser}
+                onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
+              />}
+              {activeTab === 'audit' && canViewAuditTrail && <AuditTrail orgId={currentOrgId} logs={auditLogs} brandColor={brandColor} />}
+              {activeTab === 'maintenance' && (
+                <div className="system-owner-minimal">
+                  <MaintenanceView logs={auditLogs} onExport={() => { }} onImport={() => { }} />
+                </div>
+              )}
+              {activeTab === 'backup-restore' && (
+                <div className="system-owner-minimal">
+                  <BackupRestoreView
+                    organizations={organizations}
+                    currentOrgId={currentOrgId}
+                    currentUserId={currentUser?.id || ''}
+                    currentUserName={currentUser?.email || 'System'}
+                    allData={{
+                      organizations, users, students, qualifications, trainers, batches, sponsors,
+                      vendors, employees, payrollRuns, journalEntries, JournalLines: journalLines, auditLogs,
+                      budgets: [], chartOfAccounts: accounts, purchaseOrders, paymentHistory, payables, accountingPeriods,
+                      checkVouchers, eftBatches, goodsReceipts, bankReconciliations, warehouseLocations,
+                      stockItems, inventoryLevels, inventoryTransactions, stockAdjustments, nonStockItems: items,
+                      fixedAssets, bankAccounts, locations
+                    }}
+                    onRestore={handleRestoreBackup}
+                    onNotify={handleNotify}
+                    currency={currentOrg?.currency || 'USD'}
+                  />
+                </div>
+              )}
+              {activeTab === 'tenant-mgmt' && (
+                <div className="system-owner-minimal">
+                  <TenantManagementView organizations={organizations} onAddTenant={handleAddOrganization} onUpdateTenant={(id, updates) => handleUpdateOrganization(id, updates)} />
+                </div>
+              )}
+              {activeTab === 'schema' && (
+                <div className="system-owner-minimal">
+                  <SchemaManualView />
+                </div>
+              )}
+              {activeTab === 'payment-monitoring' && (
+                <div className="system-owner-minimal">
+                  <PaymentMonitoringView payments={payments} organizations={organizations} />
+                </div>
+              )}
+              {activeTab === 'feedback' && (
+                <div className={isSysAdmin ? 'system-owner-minimal' : undefined}>
+                  <FeedbackManagementView
+                    tickets={feedbackTickets}
+                    currentUser={currentUser}
+                    currentOrgId={currentOrgId}
+                    organizations={organizations}
+                    users={users}
+                    brandColor={brandColor}
+                    onCreateTicket={handleCreateFeedbackTicket}
+                    onUpdateTicket={handleUpdateFeedbackTicket}
+                    onNotify={handleNotify}
+                  />
+                </div>
+              )}
+              {activeTab === 'soa' && (
+                <SOAView
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                  orgName={currentOrg?.name || 'Institution'}
+                />
+              )}
+              {activeTab === 'aging-report' && (
+                <ARAgingReportView
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                />
+              )}
+              {activeTab === 'write-off' && (
+                <ARWriteOffView
+                  orgId={currentOrgId}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                  users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency || 'USD'}
+                  onPostJournal={handlePostJournal}
+                  onSaveJournal={handleSaveJournalDraft}
+                  onApproveJournal={handleApproveJournal}
+                  onViewJournal={handleViewJournal}
+                  onNotify={handleNotify}
+                  initialContext={navigationContext}
+                  onClearContext={() => setNavigationContext(null)}
+                  organization={currentOrg}
+                  brandColor={brandColor}
+                />
+              )}
+              {activeTab === 'reclassify' && (
+                <ReclassificationView
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                  currentUser={currentUser}
+                  onPostJournal={handlePostJournal}
+                  onViewJournal={handleViewJournal}
+                  onNotify={handleNotify}
+                />
+              )}
+              {activeTab === 'credit-debit-memo' && (
+                <ARCreditDebitMemoView
+                  orgId={currentOrgId}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  invoices={invoices.filter(i => i.orgId === currentOrgId && !i.isDeleted)}
+                  users={users.filter(u => u.orgId === currentOrgId && !u.isDeleted)}
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  currency={currentOrg?.currency || 'USD'}
+                  onPostJournal={handlePostJournal}
+                  onSaveJournal={handleSaveJournalDraft}
+                  onUpdateJournal={handleUpdateJournalDraft}
+                  onApproveJournal={handleApproveJournal}
+                  onReverseJournal={reverseJournalEntry}
+                  onViewJournal={handleViewJournal}
+                  onNotify={handleNotify}
+                  organization={currentOrg}
+                  brandColor={brandColor}
+                />
+              )}
+              {activeTab === 'collection-receipt' && (
+                <ARCollectionReceiptView
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  payments={payments.filter(p => p.orgId === currentOrgId && !p.isDeleted)}
+                  bankAccounts={bankAccounts.filter(b => b.orgId === currentOrgId && !b.isDeleted)}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                />
+              )}
+              {activeTab === 'customer-ledger' && (
+                <ARCustomerLedgerView
+                  entries={activeJournalEntries}
+                  lines={filteredLines}
+                  accounts={filteredAccounts}
+                  students={students.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  sponsors={sponsors.filter(s => s.orgId === currentOrgId && !s.isDeleted)}
+                  currency={currentOrg?.currency || 'USD'}
+                  brandColor={brandColor}
+                />
+              )}
+
+              {activeTab === 'customers' && (
+                <CustomerMasterListView
+                  sponsors={sponsors}
+                  students={students}
+                  invoices={invoices}
+                  enrollments={enrollments}
+                  batches={batches}
+                  qualifications={qualifications}
+                  accounts={accounts}
+                  brandColor={brandColor}
+                  onAddSponsor={handleAddSponsor}
+                  onUpdateSponsor={handleUpdateSponsor}
+                  onDeleteSponsor={handleDeleteSponsor}
+                  onAddStudent={handleAddStudent}
+                  onUpdateStudent={handleUpdateStudent}
+                  onDeleteStudent={handleDeleteStudent}
+                  onBatchAddStudents={handleBatchAddStudents}
+                  onNotify={handleNotify}
+                />
+              )}
 
             </>
           )}
@@ -8216,13 +8254,12 @@ function NavItem({ icon, label, active, onClick, compact, brandColor }: NavItemP
       } as React.CSSProperties}
     >
       <div
-        className={`shrink-0 transition-transform duration-500 ${
-          activeIconUsesBrandStroke
-            ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-white/95 shadow-sm'
-            : active
-              ? 'scale-110 text-white'
-              : 'group-hover:scale-110 text-slate-500 group-hover:text-brand'
-        } `}
+        className={`shrink-0 transition-transform duration-500 ${activeIconUsesBrandStroke
+          ? 'flex h-7 w-7 items-center justify-center rounded-lg bg-white/95 shadow-sm'
+          : active
+            ? 'scale-110 text-white'
+            : 'group-hover:scale-110 text-slate-500 group-hover:text-brand'
+          } `}
         style={activeIconUsesBrandStroke ? { color: brandColor } : undefined}
       >
         {icon}
@@ -8257,24 +8294,21 @@ export function NavSection({ label, isOpen, onToggle, compact, children }: NavSe
           </p>
         )}
         <span
-          className={`text-slate-500 transition-transform duration-300 ease-in-out ${
-            isOpen ? 'rotate-180' : ''
-          }`}
+          className={`text-slate-500 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180' : ''
+            }`}
         >
           ▼
         </span>
       </button>
       <div
-        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${
-          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
-        }`}
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+          }`}
         aria-hidden={!isOpen}
       >
         <div className="overflow-hidden">
           <div
-            className={`space-y-1 pt-1 transition-transform duration-300 ease-in-out ${
-              isOpen ? 'translate-y-0' : '-translate-y-1'
-            }`}
+            className={`space-y-1 pt-1 transition-transform duration-300 ease-in-out ${isOpen ? 'translate-y-0' : '-translate-y-1'
+              }`}
           >
             {children}
           </div>
